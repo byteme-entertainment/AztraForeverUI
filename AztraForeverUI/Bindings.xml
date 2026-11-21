@@ -1,0 +1,5 @@
+<Bindings>
+  <Binding name="AFUI_GUILDCOMM" header="AFUI">
+    AFUI_ToggleGuildCommunities()
+  </Binding>
+</Bindings>

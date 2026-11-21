@@ -1,0 +1,115 @@
+# Aztra's Forever UI
+
+> **Version 0.91 Beta.** This addon was specifically designed for **Crusader-Storm**. It is a public beta: please report anything odd. [Download the latest version](https://github.com/byteme-entertainment/AztraForeverUI/releases/latest) · [Changelog](CHANGELOG.md)
+
+**Make World of Warcraft: The Burning Crusade Classic look and play like Blizzard's *WoW: Forever UI*.**
+
+Aztra's Forever UI is an addon for the **2.5.3** client. It redraws the interface in the style of Forever's modern HUD (bronze metal windows, red buttons, the round minimap, new action bars) and adds Forever's own **Edit Mode**, so you can move and resize the HUD the way the newer game does. It works on top of the client's own frames: clicks, drags, tooltips and secure actions stay Blizzard's.
+
+![The Forever HUD in game](screenshots/world.png)
+
+## What you get
+
+| Area | What changes |
+| --- | --- |
+| **Unit frames** | Forever's player, target, focus, party and pet frames, cast bars, buffs and debuffs (28 px icons, time under each, dispel-coloured borders). |
+| **Action bars** | Main bar, two bottom bars, two right bars, pet, stance and possess bars, XP and reputation bar, micro menu, bag bar (full row, single icon, or hidden). Key bindings, macro names, cooldown numbers, range tint, proc glow, action button effects. Quick Keybind Mode (`/afui keybind`). |
+| **Nameplates** | Forever's plates with your own debuffs on enemy plates and a slightly larger target plate. |
+| **Bags and bank** | Forever's bag windows, combined bags, new-item glow, item level on every slot, vendor price in tooltips, bank window. |
+| **Character** | Character sheet with its panes (reputation, skills, PvP, pet), item level on gear. |
+| **Professions** | A professions overview and Forever's crafting window with filters and the skill-up animation. |
+| **Spellbook and talents** | Spellbook with an option to hide lower spell ranks; the talent window. |
+| **Map** | The world map in a Forever window (windowed and maximized), your tracked quests as numbered pins, optional always-visible zoom buttons for the minimap. |
+| **Quest log and tracker** | Forever's quest log, and an objective tracker. New quests are tracked automatically (switchable). Works alongside Questie. |
+| **Social and guild** | Friends, Who, ignore list, guild roster and guild info, a guild communities style window. |
+| **Group Finder** | A Forever styled look-for-group window. |
+| **Chat** | Forever's chat window and tabs, timestamps, fading, a tab strip toggle, click a web link to copy it, **Copy Chat** window (`/copychat`). |
+| **Tooltips, loot, game menu** | Forever's tooltip box and corner anchor, loot window, and the Esc game menu with a button for Edit Mode and for this addon's settings. |
+| **Edit Mode** | Move, scale and snap frames; per-frame settings (for example **Show Portrait**); presets **Modern** and **Classic**; saved layouts you can create, copy, rename, delete, import and export. |
+| **Quality of life** | Item level on bags and gear, vendor price in tooltips, a **Sell Junk** button at vendors (and an optional auto-sell), new-item glow, auto-track new quests, quest pins on the map, copy links from chat, Copy Chat, hide lower spell ranks, nameplate debuffs, a first-run setup wizard (recommended UI scale, nameplates, clash warnings). |
+
+### New in the beta
+
+| | |
+| --- | --- |
+| ![Mounts tab](screenshots/spellbook-mounts.png) | ![Game menu logo](screenshots/gamemenu-hover-center.png) |
+| ![Vendor window](screenshots/npc-merchant.png) | ![Profiles](screenshots/settings-profiles.png) |
+| ![Item comparison](screenshots/tooltip-compare.png) | |
+
+These five are renders from a preview tool, not in-game captures (item icons show as grey squares there).
+
+### A tour
+
+| | |
+| --- | --- |
+| ![Action bars and effects](screenshots/actionfx.png) | ![Character](screenshots/character.png) |
+| ![Combined bags](screenshots/bags-combined.png) | ![Professions](screenshots/professions.png) |
+| ![Spellbook](screenshots/spellbook.png) | ![Talents](screenshots/talents.png) |
+| ![World map](screenshots/worldmap.png) | ![Quest log](screenshots/quest.png) |
+| ![Guild](screenshots/guild.png) | ![Social: Who](screenshots/social-who.png) |
+| ![Nameplates](screenshots/nameplates.png) | ![Edit Mode](screenshots/editmode.png) |
+
+## Requirements
+
+- **World of Warcraft: The Burning Crusade Classic client, version 2.5.3 (build 42328).** This is the only version it is made and tested for. Other builds, Classic Era or Wrath are not supported.
+- No other addon is needed. **Disable action bar and bag addons** (Bartender4, Dominos, ElvUI, Tukui, Bagnon, ArkInventory, AdiBags, Baganator, Combuctor, OneBag3) for the characters that use this one: they draw the same things and clash. The addon warns you at login and in the setup wizard and never disables anything for you.
+
+## Install
+
+1. Download the latest zip and extract it.
+2. Copy the **`AztraForeverUI`** folder into  
+   `World of Warcraft\_classic_\Interface\AddOns\`  
+   (the path ends `...\Interface\AddOns\AztraForeverUI\AztraForeverUI.toc`).
+3. Start the game, or type `/reload` if you are already logged in. Make sure **Aztra's Forever UI** is ticked in the AddOns list on the character screen.
+4. A welcome window appears on first login: apply the recommended UI scale and pick your nameplates.
+
+More detail: [INSTALL.md](INSTALL.md).
+
+## Using it
+
+- **Settings:** `/afui`, the **Aztra's Forever UI** button in the Esc menu, or the gear in the Edit Mode dialog. Pages: General, Profiles, Action Bars, Chat, Tooltips & Bags, Nameplates, Tracker & Map, About. Every option takes effect at once, has a tooltip, and a page shows only what this build can honour.
+- **Edit Mode:** `/editmode` or the Edit Mode button in the Esc menu. Pick **Modern** or **Classic** or a saved layout, drag frames, and use the per-frame settings. The dialog has New, Copy, Rename, Delete, Save and Revert.
+- **Where your data is kept:** layouts live in `AztraForeverUIDB` (account) and `AztraForeverUICharDB` (per character), in your WTF folder. Window positions are kept per character.
+
+![Settings](screenshots/settings-general.png)
+
+## Slash commands
+
+| Command | What it does |
+| --- | --- |
+| `/afui` or `/afui config [page]` | Open the settings window (pages: general, actionbars, chat, tooltips, nameplates, tracker, about). |
+| `/afui help` | List every command. |
+| `/afui wizard` | Run the first-time setup again (UI scale, nameplates, clashing addons). |
+| `/afui keybind` | Quick Keybind Mode: hover an action button and press a key. |
+| `/afui npdebuffs` | Turn your debuffs on enemy nameplates on or off. |
+| `/afui resetwindows` | Put every window back at its default spot. |
+| `/afui questie` | Explain why Questie's tracker might not show. |
+| `/afui audit [report]`, `/afui shots` | Developer tools: measure every window, or take a screenshot of each. |
+| `/afui about`, `/afui links` | Print the author's links. |
+| `/editmode` | Move and resize the HUD. |
+| `/professions`, `/prof` | Open the professions overview. |
+| `/copychat` | Open the Copy Chat window. |
+
+## Known limitations
+
+- **2.5.3 (build 42328) only.** Other client builds are not tested and may show errors.
+- It re-skins the client's own windows. The client's options windows (Video, Sound, Interface, Key Bindings) stay as Blizzard made them.
+- Some actions are protected by the game and cannot change in combat. Edit Mode and key binding changes wait until combat ends.
+- Another addon that replaces the same frames (action bars, bags, unit frames) will clash.
+- Not every Forever window exists in the Classic client, so some Forever features have nothing to attach to. Features of the modern game that the 2.5.3 client cannot do are not faked.
+- The addon is large (about 80 MB), mostly textures.
+
+## Support, credits and links
+
+Thank you for using and supporting Aztra's Forever UI. Made with love by Aztra.
+
+- Patreon: <https://www.patreon.com/cw/Aztra80synth>
+- Linktree (music): <https://linktr.ee/aztrasynthwave>
+
+In game, **Settings > About** has a button for each link that opens a box where you press Ctrl+C to copy it (WoW cannot open a browser), or type `/afui about`.
+
+## Rights
+
+All rights reserved. (c) 2026 Aztra.
+
+World of Warcraft and Forever UI artwork are property of Blizzard Entertainment. This project is a fan made addon and is not affiliated with or endorsed by Blizzard Entertainment.

@@ -1,0 +1,75 @@
+## Interface: 20400
+## Title: Aztra's Forever UI
+## Notes: Forever-style interface for WoW TBC. Specifically designed for Crusader-Storm. Version 0.91 Beta.
+## Author: Aztra
+## Version: 0.91-beta
+## SavedVariables: AztraForeverUIDB
+## SavedVariablesPerCharacter: AztraForeverUICharDB
+
+Compat.lua
+Core.lua
+Media\Atlas.lua
+Media\NameplateArt.lua
+Media\LfgArt.lua
+Atlas.lua
+ActionButtonFX.lua
+ActionBars.lua
+Bindings.lua
+BarExtras.lua
+Buffs.lua
+UnitFrames.lua
+BarGlow.lua
+CompactParty.lua
+CastBars.lua
+NameplateAuras.lua
+Nameplates.lua
+Minimap.lua
+WorldMap.lua
+MapQuestPins.lua
+MapCityLinks.lua
+QoL.lua
+Bags.lua
+CharacterFrame.lua
+CharacterPanes.lua
+Spellbook.lua
+Talents.lua
+Professions.lua
+WinKit.lua
+SocialFrame.lua
+QuestLog.lua
+GameMenu.lua
+Loot.lua
+VendorTools.lua
+Bank.lua
+GroupFinder.lua
+Tooltips.lua
+GuildWindow.lua
+Tracker.lua
+GuildCommunities.lua
+Movable.lua
+Chat.lua
+ChatQoL.lua
+QuestLinkTip.lua
+EditMode\Snap.lua
+EditMode\Registry.lua
+EditMode\Overlay.lua
+EditMode\Presets.lua
+EditMode\Layouts.lua
+EditMode\Widgets.lua
+EditMode\Dialog.lua
+QuickKeybind.lua
+Settings.lua
+Wizard.lua
+FloatingText.lua
+CombatText.lua
+Audit.lua
+Profiles.lua
+Dialogs.lua
+LootRoll.lua
+NpcKit.lua
+MerchantFrame.lua
+TrainerFrame.lua
+MailFrame.lua
+AuctionFrame.lua
+Mounts.lua
+PetPane.lua
