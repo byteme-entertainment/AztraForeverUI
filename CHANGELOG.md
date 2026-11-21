@@ -1,6 +1,10 @@
 # Changelog
 
-## 0.91 Beta (latest)
+## 0.92 Beta (latest)
+
+- **Outfitter compatibility.** Outfitter's panel, button and tabs now sit in front of the character window and beside its mode tabs (they used to be drawn behind them), and are re-placed when the window opens, collapses or the scale changes. `/afui compat` prints the state of Outfitter's frames (and other known addons) so problems can be reported.
+
+## 0.91 Beta
 
 Fixes from the first round of tester reports, plus credits.
 

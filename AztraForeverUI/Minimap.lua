@@ -154,7 +154,7 @@ function AFUI.SetupMinimap()
   end
   local function raise()
     for _, n in ipairs({ "MiniMapTracking", "MiniMapTrackingFrame", "MiniMapMailFrame", "MiniMapBattlefieldFrame", "MiniMapMeetingStoneFrame",
-      "MiniMapLFGFrame", "GameTimeFrame", "AFUI_MinimapHeader", "AFUI_MinimapClock", "AFUI_MinimapZoomIn", "AFUI_MinimapZoomOut" }) do
+      "MiniMapLFGFrame", "GameTimeFrame", "OutfitterMinimapButton", "AFUI_MinimapHeader", "AFUI_MinimapClock", "AFUI_MinimapZoomIn", "AFUI_MinimapZoomOut" }) do
       lift(_G[n])
     end
     for _, host in ipairs({ Minimap, MinimapCluster, mf }) do

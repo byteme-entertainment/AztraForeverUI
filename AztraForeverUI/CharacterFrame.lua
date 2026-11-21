@@ -31,6 +31,7 @@ local TAB_W, TAB_H, TAB_GAP = 55, 55, 2 -- mode tabs on the right edge
 local CF = {}
 AFUI.CharacterFrame = CF
 CF.W, CF.H, CF.LEFT_W, CF.RIGHT_W, CF.TOP = W, H, LEFT_W, RIGHT_W, TOP
+CF.TAB_W = TAB_W
 
 -- the collapse button of the capture (f0017, 1.405 px per unit): plate 20 x 19, centre 377 / 40 units from the window's top left, flat colours sampled from the frame
 CF.COLLAPSE = { w = 24, h = 24, cx = 377, cy = -40, border = 1.4, cols = 6, triW = 6, triH = 9.6,
