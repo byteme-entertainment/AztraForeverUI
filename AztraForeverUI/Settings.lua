@@ -311,10 +311,7 @@ def { category = "about", type = "text", id = "aboutThanks", lines = 2,
 def { category = "about", type = "text", id = "aboutCrusader", lines = 2,
   text = "|cffffd100Version 0.91 Beta.|r This addon was specifically designed for |cff66ccffCrusader-Storm|r. Please report anything odd you find while testing." }
 -- WoW cannot open a browser: a link button shows the url in a small box, Ctrl+C copies it.
-S.LINKS = {
-  { id = "Patreon", label = "Patreon", url = "https://www.patreon.com/cw/Aztra80synth" },
-  { id = "Linktree", label = "Linktree (music)", url = "https://linktr.ee/aztrasynthwave" },
-}
+S.LINKS = {} -- add { id, label, url } entries here; each one becomes a button on the About page
 S.LINK_HINT = "Press Ctrl+C to copy, then paste in your browser"
 function S.ShowLink(l)
   if AFUI.ChatQoL and AFUI.ChatQoL.OpenUrl then return AFUI.ChatQoL.OpenUrl(l.url, l.label, S.LINK_HINT) end
@@ -325,7 +322,7 @@ for _, l in ipairs(S.LINKS) do
     tooltip = l.url .. "\nClick to show the link, then press Ctrl+C to copy it." }
 end
 def { category = "about", type = "text", id = "aboutRights", lines = 3,
-  text = "|cffbfbfbfAll rights reserved. (c) 2026 Aztra.\nWorld of Warcraft and Forever UI artwork are property of Blizzard Entertainment.|r" }
+  text = "|cffbfbfbfAll rights reserved. (c) 2026 ByteMe Entertainment.\nWorld of Warcraft and Forever UI artwork are property of Blizzard Entertainment.|r" }
 
 function S.Version()
   local meta = _G.GetAddOnMetadata
@@ -556,7 +553,7 @@ local function printLinks()
   say("links (the buttons on the About page open a box to copy them)")
   for _, l in ipairs(S.LINKS) do AFUI.Print("  |cff66ccff" .. l.label .. "|r  " .. l.url) end
 end
-AFUI.Slash.Register("about", printLinks, "print the author's links (Patreon, Linktree)", "/afui about")
+AFUI.Slash.Register("about", printLinks, "print the author's links", "/afui about")
 AFUI.Slash.Register("links", printLinks, "same as /afui about", "/afui links")
 AFUI.Slash.Info("/editmode", "move and resize the HUD")
 AFUI.Slash.Info("/professions  /prof", "open the professions overview")

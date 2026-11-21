@@ -85,7 +85,6 @@ More detail: [INSTALL.md](INSTALL.md).
 | `/afui resetwindows` | Put every window back at its default spot. |
 | `/afui questie` | Explain why Questie's tracker might not show. |
 | `/afui audit [report]`, `/afui shots` | Developer tools: measure every window, or take a screenshot of each. |
-| `/afui about`, `/afui links` | Print the author's links. |
 | `/editmode` | Move and resize the HUD. |
 | `/professions`, `/prof` | Open the professions overview. |
 | `/copychat` | Open the Copy Chat window. |
@@ -99,17 +98,12 @@ More detail: [INSTALL.md](INSTALL.md).
 - Not every Forever window exists in the Classic client, so some Forever features have nothing to attach to. Features of the modern game that the 2.5.3 client cannot do are not faked.
 - The addon is large (about 80 MB), mostly textures.
 
-## Support, credits and links
+## Credits
 
-Thank you for using and supporting Aztra's Forever UI. Made with love by Aztra.
-
-- Patreon: <https://www.patreon.com/cw/Aztra80synth>
-- Linktree (music): <https://linktr.ee/aztrasynthwave>
-
-In game, **Settings > About** has a button for each link that opens a box where you press Ctrl+C to copy it (WoW cannot open a browser), or type `/afui about`.
+Thank you for using Aztra's Forever UI. Made with love by Aztra, specifically designed for Crusader-Storm.
 
 ## Rights
 
-All rights reserved. (c) 2026 Aztra.
+All rights reserved. (c) 2026 ByteMe Entertainment.
 
 World of Warcraft and Forever UI artwork are property of Blizzard Entertainment. This project is a fan made addon and is not affiliated with or endorsed by Blizzard Entertainment.

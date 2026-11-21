@@ -14,7 +14,7 @@ Fixes from the first round of tester reports, plus credits.
 - **Mailbox and Auction House skins are off by default** (testers found them rough). You can turn them on from General, they are marked beta.
 - **Quest Log key (L)** opens the map with the quest panel and closes it again with a second press. `/afui qlog` prints a short report if it still misbehaves.
 - **Mounts tab** has a horse icon.
-- **Credits and About.** Credits now list only Patreon and Linktree, and the addon says it was specifically designed for Crusader-Storm.
+- **Credits and About.** The addon says it was specifically designed for Crusader-Storm. Rights now read 2026 ByteMe Entertainment and personal links were removed.
 - **Game menu logo** has a new light sweep, a glow that follows the mouse and a smooth hover zoom.
 - Many smaller robustness fixes from an audit (minimap addon buttons, map panning, quest log taint in combat, fonts on Korean and Chinese clients, saved-settings edge cases).
 
