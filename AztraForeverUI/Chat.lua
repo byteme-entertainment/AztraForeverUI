@@ -4,9 +4,9 @@
 -- and 2.4.3 lacks are added under Blizzard's names. Docking, dragging, scrolling and the combat log stay Blizzard's.
 local IS_243 = AFUI.IS_243
 
--- "Chat" switched off (the player's choice, or Prat / Chatter / Glass / ElvUI is loaded; AddonCompat.lua): this file skins the chat windows the moment it loads, so the
--- whole file is skipped. ChatQoL.lua, which needs its exports, is switched off with it.
-if not AFUI.ModuleEnabled("chat") then return end
+-- "Chat" switched off (the player's choice, or Prat / Chatter / Glass / ElvUI is loaded; AddonCompat.lua): nothing here is applied. The real client loads the SavedVariables
+-- AFTER our files ran (just before our ADDON_LOADED), so while this file loads it only DEFINES things (pure functions and tables: harmless when Chat is off, and ChatQoL.lua
+-- finds its exports); the skinning, the hooks and the frames it makes are in Setup(), run from ADDON_LOADED when AFUI.ModuleEnabled("chat") says so (never at file load).
 
 -- Version differences. 2.4.3: FrameXML FloatingChatFrame.xml/ChatFrame.xml (MOUZU/Blizzard-WoW-Interface 2.4.3);
 -- 2.5.3: the same files at Gethe/wow-ui-source tag 2.5.3.
@@ -295,75 +295,83 @@ local function SkinWindow(chat)
   SkinButtons(chat)
 end
 
-for i = 1, V.windows do SkinWindow(_G["ChatFrame" .. i]) end
--- Only now: Blizzard looks these names up on every window. 2.4.3 gets the button frame names appended so its colour and
--- fades follow the window. 2.5.3 must not: GMChatFrame_OnLoad walks the table and indexes _G[name .. value] without nil
--- checks, so it gets post-hooks on the window colour / alpha instead.
-local have = {}
-for _, k in ipairs(CHAT_FRAME_TEXTURES) do have[k] = true end
-for _, k in ipairs(BORDER) do
-  for _, key in ipairs(V.oldArt and { k, "ButtonFrame" .. k } or { k }) do
-    if not have[key] then CHAT_FRAME_TEXTURES[#CHAT_FRAME_TEXTURES + 1] = key end
-  end
-end
-if not V.oldArt then
-  local function ButtonBorder(chat, fn, ...)
-    for _, k in ipairs(BORDER) do
-      local t = _G[chat:GetName() .. "ButtonFrame" .. k]
-      if t then t[fn](t, ...) end
-    end
-  end
-  hooksecurefunc("FCF_SetWindowColor", function(chat, r, g, b) ButtonBorder(chat, "SetVertexColor", r, g, b) end)
-  hooksecurefunc("FCF_SetWindowAlpha", function(chat, alpha) ButtonBorder(chat, "SetAlpha", alpha or DEFAULT_CHATFRAME_ALPHA) end)
-end
-if V.newWindow then hooksecurefunc(V.newWindow, SkinWindow) end
-
-if V.oldArt then
-  SkinEditBox()
-  hooksecurefunc("FCF_DockUpdate", UpdateTabs)
-  hooksecurefunc("FCF_ChatTabFadeFinished", function(tab, chat)
-    if chat.isDocked or chat:IsShown() then tab:Show(); tab:SetAlpha(TabAlpha(chat, tab)) end
-  end)
-  -- 2.4.3 fades tabs from 0 and out to 0 (FCF_OnUpdate); Forever between the resting and mouse-over alphas.
-  hooksecurefunc("UIFrameFade", function(frame, info)
-    local chat = frame.afuiChat
-    if not chat then return end
-    local sel = Selected(chat)
-    if not Fades() then
-      info.startAlpha = sel and TAB_OVER or TAB_OVER_OTHER; info.endAlpha = info.startAlpha; frame:SetAlpha(info.startAlpha); return
-    end
-    info.startAlpha = info.mode == "OUT" and (sel and TAB_OVER or TAB_OVER_OTHER) or (sel and TAB_REST or TAB_REST_OTHER)
-    if info.mode == "OUT" then info.endAlpha = sel and TAB_REST or TAB_REST_OTHER
-    else info.endAlpha = sel and TAB_OVER or TAB_OVER_OTHER end
-    frame:SetAlpha(info.startAlpha)
-  end)
-else
-  CHAT_TAB_SHOW_DELAY = 0.2 -- Forever floatingchatframe.lua:9
-end
+local isSetUp
 -- The resting tab alphas (2.5.3 reads the two constants at every fade; 2.4.3 re-runs UpdateTabs). Run again when 'chatFade' changes.
 function AFUI.ChatApplyFade()
+  if not isSetUp then return end -- Chat is off (or not set up yet): there are no tabs of ours to fade
   if V.oldArt then UpdateTabs(); return end
   local f = Fades()
   CHAT_FRAME_TAB_SELECTED_NOMOUSE_ALPHA, CHAT_FRAME_TAB_NORMAL_NOMOUSE_ALPHA = f and TAB_REST or TAB_OVER, f and TAB_REST_OTHER or TAB_OVER_OTHER
 end
-if not V.oldArt then AFUI.ChatApplyFade() end
-hooksecurefunc("FCF_SetButtonSide", PlaceButtons)
 
--- Forever's button column: channel button at the top, chat menu at the bottom (strata MEDIUM; Forever
--- floatingchatframevoicechat.xml:4-23, floatingchatframe.xml:723-738).
-local channel = V.channelButton and MakeChannelButton() or ChatFrameChannelButton
-channel:ClearAllPoints(); channel:SetPoint("TOP", ChatFrame1ButtonFrame, "TOP", 0, 0); channel:SetFrameStrata("MEDIUM")
-ChatFrameMenuButton:ClearAllPoints(); ChatFrameMenuButton:SetPoint("BOTTOM", ChatFrame1ButtonFrame, "BOTTOM", 0, 0)
-ChatFrameMenuButton:SetFrameStrata("MEDIUM")
-for _, s in ipairs({ { "Normal", "Up" }, { "Pushed", "Down" }, { "Disabled", "Disabled" } }) do
-  local t = ChatFrameMenuButton["Get" .. s[1] .. "Texture"](ChatFrameMenuButton)
-  if t then Art(t, "UI-ChatIcon-Chat-" .. s[2]) end
+-- Everything that skins, hooks or makes a frame. Run once, from ADDON_LOADED (the SavedVariables exist by then), and only when the "Chat" switch is on.
+local function Setup()
+  if isSetUp then return end
+  isSetUp = true
+  for i = 1, V.windows do SkinWindow(_G["ChatFrame" .. i]) end
+  -- Only now: Blizzard looks these names up on every window. 2.4.3 gets the button frame names appended so its colour and
+  -- fades follow the window. 2.5.3 must not: GMChatFrame_OnLoad walks the table and indexes _G[name .. value] without nil
+  -- checks, so it gets post-hooks on the window colour / alpha instead.
+  local have = {}
+  for _, k in ipairs(CHAT_FRAME_TEXTURES) do have[k] = true end
+  for _, k in ipairs(BORDER) do
+    for _, key in ipairs(V.oldArt and { k, "ButtonFrame" .. k } or { k }) do
+      if not have[key] then CHAT_FRAME_TEXTURES[#CHAT_FRAME_TEXTURES + 1] = key end
+    end
+  end
+  if not V.oldArt then
+    local function ButtonBorder(chat, fn, ...)
+      for _, k in ipairs(BORDER) do
+        local t = _G[chat:GetName() .. "ButtonFrame" .. k]
+        if t then t[fn](t, ...) end
+      end
+    end
+    hooksecurefunc("FCF_SetWindowColor", function(chat, r, g, b) ButtonBorder(chat, "SetVertexColor", r, g, b) end)
+    hooksecurefunc("FCF_SetWindowAlpha", function(chat, alpha) ButtonBorder(chat, "SetAlpha", alpha or DEFAULT_CHATFRAME_ALPHA) end)
+  end
+  if V.newWindow then hooksecurefunc(V.newWindow, SkinWindow) end
+
+  if V.oldArt then
+    SkinEditBox()
+    hooksecurefunc("FCF_DockUpdate", UpdateTabs)
+    hooksecurefunc("FCF_ChatTabFadeFinished", function(tab, chat)
+      if chat.isDocked or chat:IsShown() then tab:Show(); tab:SetAlpha(TabAlpha(chat, tab)) end
+    end)
+    -- 2.4.3 fades tabs from 0 and out to 0 (FCF_OnUpdate); Forever between the resting and mouse-over alphas.
+    hooksecurefunc("UIFrameFade", function(frame, info)
+      local chat = frame.afuiChat
+      if not chat then return end
+      local sel = Selected(chat)
+      if not Fades() then
+        info.startAlpha = sel and TAB_OVER or TAB_OVER_OTHER; info.endAlpha = info.startAlpha; frame:SetAlpha(info.startAlpha); return
+      end
+      info.startAlpha = info.mode == "OUT" and (sel and TAB_OVER or TAB_OVER_OTHER) or (sel and TAB_REST or TAB_REST_OTHER)
+      if info.mode == "OUT" then info.endAlpha = sel and TAB_REST or TAB_REST_OTHER
+      else info.endAlpha = sel and TAB_OVER or TAB_OVER_OTHER end
+      frame:SetAlpha(info.startAlpha)
+    end)
+  else
+    CHAT_TAB_SHOW_DELAY = 0.2 -- Forever floatingchatframe.lua:9
+  end
+  if not V.oldArt then AFUI.ChatApplyFade() end
+  hooksecurefunc("FCF_SetButtonSide", PlaceButtons)
+
+  -- Forever's button column: channel button at the top, chat menu at the bottom (strata MEDIUM; Forever
+  -- floatingchatframevoicechat.xml:4-23, floatingchatframe.xml:723-738).
+  local channel = V.channelButton and MakeChannelButton() or ChatFrameChannelButton
+  channel:ClearAllPoints(); channel:SetPoint("TOP", ChatFrame1ButtonFrame, "TOP", 0, 0); channel:SetFrameStrata("MEDIUM")
+  ChatFrameMenuButton:ClearAllPoints(); ChatFrameMenuButton:SetPoint("BOTTOM", ChatFrame1ButtonFrame, "BOTTOM", 0, 0)
+  ChatFrameMenuButton:SetFrameStrata("MEDIUM")
+  for _, s in ipairs({ { "Normal", "Up" }, { "Pushed", "Down" }, { "Disabled", "Disabled" } }) do
+    local t = ChatFrameMenuButton["Get" .. s[1] .. "Texture"](ChatFrameMenuButton)
+    if t then Art(t, "UI-ChatIcon-Chat-" .. s[2]) end
+  end
+
+  -- Forever's top button is the social one: left click opens the channel pane (as it did), right click the friends window.
+  channel:HookScript("OnMouseUp", function(_, button) if button == "RightButton" and ToggleFriendsFrame then ToggleFriendsFrame(1) end end)
+  channel:HookScript("OnEnter", function() GameTooltip:AddLine("Right click: Friends", 0.7, 0.7, 0.7); GameTooltip:Show() end)
+
 end
-
--- Forever's top button is the social one: left click opens the channel pane (as it did), right click the friends window.
-channel:HookScript("OnMouseUp", function(_, button) if button == "RightButton" and ToggleFriendsFrame then ToggleFriendsFrame(1) end end)
-channel:HookScript("OnEnter", function() GameTooltip:AddLine("Right click: Friends", 0.7, 0.7, 0.7); GameTooltip:Show() end)
-
 ---------------------------------------------------------------- size and position
 -- Forever Modern: 430x170 at BOTTOMLEFT 35,145 (mainline editmodepresetlayouts.lua:502-516, camelot
 -- CHAT_FRAME_ANCHOR_OFFSET_Y); Mat's real client has it in the bottom left corner (y 28, measured). Blizzard still places ChatFrame1 for the old bars, so this re-runs after every
@@ -393,7 +401,9 @@ local function FirstRunDefaults()
   end
 end
 
+AFUI.On("ADDON_LOADED", function(_, addon) if addon == "AztraForeverUI" and AFUI.ModuleEnabled("chat") then Setup() end end)
 AFUI.RegisterModule("Chat", { OnLogin = function()
+  Setup() -- done at ADDON_LOADED in the client (a no-op then); here for a host that never fires it
   Place()
   FirstRunDefaults()
   for _, n in ipairs({ "UIParent_ManageFramePositions", "FCF_UpdateDockPosition" }) do

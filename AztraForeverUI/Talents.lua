@@ -454,7 +454,7 @@ end
 
 function Talents.Build()
   local host = _G.PlayerTalentFrame
-  if W.win or not host then return end
+  if W.win or not host or not AFUI.ModuleEnabled("talents") then return end -- Blizzard_TalentUI loads on demand: switched off, the client's own window stays
   local level = host:GetFrameLevel()
   quiet(host)
   host:SetWidth(Talents.WIDTH); host:SetHeight(Talents.HEIGHT)

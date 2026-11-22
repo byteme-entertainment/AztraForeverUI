@@ -504,6 +504,6 @@ end
 
 function G.Setup() AFUI.RunOutOfCombat(setup) end
 AFUI.On("ADDON_LOADED", function(_, name)
-  if name == "Blizzard_LookingForGroupUI" then G.Setup() end -- 2.5.3 loads the tool on demand
+  if name == "Blizzard_LookingForGroupUI" and AFUI.ModuleEnabled("lfg") then G.Setup() end -- 2.5.3 loads the tool on demand; switched off: the client's own window stays
 end)
 AFUI.RegisterModule("GroupFinder", { OnLogin = G.Setup })

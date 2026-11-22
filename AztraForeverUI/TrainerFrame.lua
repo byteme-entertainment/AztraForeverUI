@@ -27,7 +27,7 @@ T.SPEC.after = function(f)
 end
 
 function T.Setup()
-  if T.done or not _G.ClassTrainerFrame then return end
+  if T.done or not _G.ClassTrainerFrame or not AFUI.ModuleEnabled("trainer") then return end -- Blizzard_TrainerUI loads on demand: switched off, the client's own window stays
   T.done = true
   AFUI.RunOutOfCombat(function() AFUI.NpcKit.Skin(T.SPEC) end)
 end

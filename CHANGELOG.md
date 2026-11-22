@@ -1,6 +1,16 @@
 # Changelog
 
-## 0.94 Beta (latest)
+## 0.95 Beta (latest)
+
+- **Aura filters for the raid-style party frames.** Choose what auras show: all, only mine, only a list, all except a list, or mine plus a list; only dispellable debuffs; hide permanent buffs; max icons and sorting. Built-in starter lists (healer HoTs, raid defensive cooldowns, utility buffs, TBC raid debuffs), a spell picker with spellbook suggestions, recently seen auras and target auras, export and import. Open it with /afui filters.
+- **Windows page.** Settings > Windows has one switch for every window we draw, so you can keep Blizzard's own version of just that window. Off means completely native. Changes apply after a reload.
+- **Chat switch fixed.** The Chat switch now honours your saved choice (it was read before saved data was loaded).
+- **Nameplates.** Plates stay put (no sliding), a compact layout, and a new Organized mode that arranges crowds in a neat screen-aligned grid. Every level is shown by default. The error "Can't measure restricted regions" is fixed.
+- **Bank and bags.** The bank opens as one combined window with a search bar and Clean Up. Choose the columns, slot size and spacing (gear button), a proper footer with the money inside the frame, red buttons, and the layout panel closes when you click outside it.
+- **Mailbox and Auction House** have a full redesign with quality-of-life tools (Open All, Collect All, recent recipients, price per unit, undercut...). They are off by default: turn them on in Settings > Windows. The Send Mail tab was redone (real attachment count, thin boxes, bag-style empty slots, one Postage label, autocomplete left alone).
+- Settings side tabs fit the window (the window is taller and the tab column scrolls if more pages are added).
+
+## 0.94 Beta
 
 - **Compatibility page.** Settings > Compatibility has one switch per part (Bags & Bank, Action bars, Unit frames, Party frames, Chat, Nameplates, Map & quest log, Tooltips) saying whether Aztra's Forever UI draws it. A part gives way by default to a known addon that draws the same thing (Bagnon, ElvUI, Bartender4, Grid2, Prat, TipTac ...), with one chat notice per character. Changes apply after /reload. Nothing is disabled behind your back.
 - **Other addons keep their anchors.** Blizzard frames that other addons anchor to (PlayerFrame, TargetFrame, Minimap, ActionButton1, ChatFrame1 and many more) stay alive with the size and place of our frames. `/afui anchors` reports any mismatch.

@@ -154,6 +154,7 @@ function V.Setup()
 end
 
 AFUI.On("MERCHANT_SHOW", function()
+  if not AFUI.ModuleEnabled("vendortools") then return end -- Sell Junk switched off (Settings > Windows): no button, no automatic selling
   V.open = true
   V.Update()
   if on("autoSellJunk") then V.Start(true) end

@@ -184,6 +184,7 @@ end
 
 function QK.Enter()
   if QK.active then return true end
+  if not AFUI.ModuleEnabled("actionbars") then say("Quick Keybind Mode works on Aztra's Forever UI's action bars: they are switched off in Settings > Windows."); return false end
   if InCombatLockdown() then
     say("Not available in combat.")
     return false

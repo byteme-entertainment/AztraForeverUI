@@ -22,6 +22,8 @@ local function say(msg) if AFUI.Print then AFUI.Print("AFUI audit: " .. msg) end
 local function m(o, name, ...)
   local fn = o and o[name]
   if type(fn) ~= "function" then return end
+  -- a forbidden / restricted frame (2.5.3 nameplate children) answers every call but IsForbidden with a client-side error that no pcall catches
+  if name ~= "IsForbidden" and AFUI.MeasureBlocked and AFUI.MeasureBlocked(o) then return end
   local ok, a = pcall(fn, o, ...)
   if ok then return a end
 end
@@ -29,6 +31,7 @@ end
 local function list(o, name)
   local fn = o and o[name]
   if type(fn) ~= "function" then return {} end
+  if AFUI.MeasureBlocked and AFUI.MeasureBlocked(o) then return {} end
   local t = { pcall(fn, o) }
   if not table.remove(t, 1) then return {} end
   return t

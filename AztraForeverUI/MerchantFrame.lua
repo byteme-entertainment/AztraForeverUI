@@ -81,7 +81,7 @@ local function after(f)
 end
 
 function M.Setup()
-  if M.done or not _G.MerchantFrame then return end
+  if M.done or not _G.MerchantFrame or not AFUI.ModuleEnabled("merchant") then return end
   M.done = true
   AFUI.RunOutOfCombat(function() M.SPEC.after = after; AFUI.NpcKit.Skin(M.SPEC) end)
 end

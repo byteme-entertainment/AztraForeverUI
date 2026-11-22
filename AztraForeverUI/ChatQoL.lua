@@ -216,7 +216,7 @@ end
 function C.ClearHistory() local db = _G.AztraForeverUICharDB; if type(db) == "table" then db.chatLog = {} end end
 
 -- The guild window (Guild & Communities) shows and keeps guild chat itself, from the events: a message filter only hides the line in the chat windows.
-function C.GuildFilter() return not C.Get("chatGuildInWindow") end
+function C.GuildFilter() return AFUI.ModuleEnabled("guild") and not C.Get("chatGuildInWindow") end -- Guild windows switched off: no window to read guild chat in, so the chat windows keep it
 
 local function feed(chat)
   if chat.afuiFed then return end

@@ -74,12 +74,23 @@ function A.Attach(s, anchor)
   local row = CreateFrame("Frame", nil, s.frame)
   row:EnableMouse(false)
   row:SetWidth(PER_ROW * (SIZE + GAP) - GAP); row:SetHeight(SIZE)
-  row:SetPoint("BOTTOM", anchor, "TOP", 0, 4)
   row.icons, row.shown = {}, 0
   s.auras = row
+  A.Place(s)
   A.skins[#A.skins + 1] = s
   return row
 end
+
+-- "Your debuffs sit": above the bar (default, rows grow upward) or below the cast bar (rows grow downward). The row hangs outward from a fixed edge of the plate,
+-- so showing, hiding or adding a row never moves the health bar, the cast bar or the name.
+function A.Place(s)
+  local row = s.auras
+  row.below = AFUI.GetSetting("nameplateAuraSide", "above") == "below"
+  row:ClearAllPoints()
+  if row.below then row:SetPoint("TOP", s.castBox, "BOTTOM", 0, -2) else row:SetPoint("BOTTOM", s.fbg, "TOP", 0, 4) end
+  if s.auraUnit and row.shown > 0 then A.Update(s, s.auraUnit) end
+end
+function A.PlaceAll() for _, s in ipairs(A.skins) do A.Place(s) end end
 
 local function refreshTimes(row)
   local now = GetTime()
@@ -113,7 +124,8 @@ function A.Update(s, unit)
     local r, col = math.floor((i - 1) / PER_ROW), (i - 1) % PER_ROW
     local inRow = math.min(PER_ROW, n - r * PER_ROW)
     b:ClearAllPoints()
-    b:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", (PER_ROW - inRow) * (SIZE + GAP) / 2 + col * (SIZE + GAP), r * (SIZE + ROW_GAP))
+    local x = (PER_ROW - inRow) * (SIZE + GAP) / 2 + col * (SIZE + GAP)
+    if row.below then b:SetPoint("TOPLEFT", row, "TOPLEFT", x, -r * (SIZE + ROW_GAP)) else b:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", x, r * (SIZE + ROW_GAP)) end
     b:Show()
   end
   for i = n + 1, row.shown do row.icons[i]:Hide() end

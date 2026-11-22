@@ -20,7 +20,7 @@ D.HOVER = 0.5                         -- row highlight strength
 
 local function g(n) return n and _G[n] end
 
-function D.Enabled() return AFUI.GetSetting("dialogsRestyle", true) and true or false end
+function D.Enabled() return AFUI.ModuleEnabled("dialogs") end -- Settings > Windows (useDialogs; the old dialogsRestyle setting still counts)
 
 -- The client's own backdrop gone (the Tooltips way: BackdropTemplate on 2.5.3, a NineSlice child on later clients, none on 2.4.3).
 local function clearBackdrop(f)
@@ -137,8 +137,4 @@ function D.Setup()
   end
 end
 
-if AFUI.Settings and AFUI.Settings.Register then
-  AFUI.Settings.Register{ category = "general", key = "dialogsRestyle", type = "check", default = true, label = "Forever dialogs and menus",
-    tooltip = "Draws the confirmation windows (Yes / No, name boxes) and the dropdown menus in the Forever look. Switching it off takes effect after /reload." }
-end
 AFUI.RegisterModule("Dialogs", { OnLogin = D.Setup })

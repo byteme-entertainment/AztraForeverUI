@@ -32,26 +32,94 @@ function BagLayout.Cell(index0, total, columns)
   return i % columns, math.floor(i / columns)
 end
 
--- The combined window's key ring section: a thin separator and the "Keys" label (KEY_HEAD px), then the key slots in the same 10 column grid,
--- reading order from the left. n = key slots (0 = no section). Returns the section's height.
+-- The combined window's key ring section: a thin separator and the "Keys" label (KEY_HEAD px), then the key slots in the same grid,
+-- reading order from the left. n = key slots (0 = no section). Returns the section's height. o = { cols, item, gap } (the player's layout).
 local KEY_HEAD = 18
 local SEARCH_H = 28 -- the combined window's search strip under the title (Mat: it gets the backpack's search bar)
-function BagLayout.KeySection(n)
+function BagLayout.KeySection(n, o)
   if not n or n <= 0 then return 0 end
-  local rows = BagLayout.Rows(n, COLS.combined)
-  return KEY_HEAD + rows * ITEM + (rows - 1) * gap("combined")
+  local cols, item, g = o and o.cols or COLS.combined, o and o.item or ITEM, o and o.gap or gap("combined")
+  local rows = BagLayout.Rows(n, cols)
+  return KEY_HEAD + rows * item + (rows - 1) * g
 end
 
+-- The combined bags window is never narrower than its footer (Clean Up, layout button, key ring button, counter and the money box side by side).
+BagLayout.COMBINED_MIN_W = 360
+
+-- The footer every window with money shares: a strip INSIDE the frame border (border px on the sides and bottom), the money box (box high, boxW wide, its bracket
+-- art drawn at that height) inset px from the right edge and pad px from the strip's top and bottom, gap px of air between the grid / rows above and the strip.
+-- The backpack stacks its currency strip under the money. The strip's height comes from the box's real height: nothing in it is placed by a magic number.
+BagLayout.FOOT = { border = 3, pad = 7, box = 17, boxW = 168, gap = 6, inset = 10 }
+function BagLayout.FooterHeight(kind) local F = BagLayout.FOOT; return F.pad * 2 + F.box + (kind == "backpack" and F.box + 3 or 0) end
+function BagLayout.FooterBelow(kind) local F = BagLayout.FOOT; return F.border + BagLayout.FooterHeight(kind) + F.gap end -- grid bottom to the window's bottom edge
+-- Rectangles { x, y, w, h } (y down from the window's top) of a w x h window's footer: the strip, the money box and (backpack) the currency strip.
+function BagLayout.Footer(kind, w, h)
+  local F, fh = BagLayout.FOOT, BagLayout.FooterHeight(kind)
+  local out = { strip = { F.border, h - F.border - fh, w - 2 * F.border, fh }, money = { w - F.inset - F.boxW, h - F.border - F.pad - F.box, F.boxW, F.box } }
+  if kind == "backpack" then
+    out.currency = out.money
+    out.money = { out.currency[1], out.currency[2] - 3 - F.box, F.boxW, F.box }
+  end
+  return out
+end
 -- kind: "bag" (separate bag), "backpack" / "combined" (search box + money strip), "keyring". Returns width, height.
--- keySlots: key ring slots shown inside a combined window.
-function BagLayout.WindowSize(kind, total, keySlots, labelH)
-  local c = COLS[kind] or 4
+-- keySlots: key ring slots shown inside a combined window. o = { cols, item, gap } overrides the combined window's grid (the player's layout).
+function BagLayout.WindowSize(kind, total, keySlots, labelH, o)
+  local c = o and o.cols or COLS[kind] or 4
+  local item, g = o and o.item or ITEM, o and o.gap or gap(kind)
   local rows = BagLayout.Rows(total, c)
-  local w = c * ITEM + (c - 1) * gap(kind) + 15
+  local w = c * item + (c - 1) * g + 15
+  if kind == "combined" then w = math.max(w, BagLayout.COMBINED_MIN_W) end
   -- the combined window: title strip, search strip, grid, key ring section, footer
-  local h = rows * ITEM + math.max(rows - 1, 0) * gap(kind) + (kind == "combined" and 79 + SEARCH_H or kind == "backpack" and 126 - SEARCH_H or 57)
-  if kind == "combined" then h = h + BagLayout.KeySection(keySlots) + (labelH or 0) end
+  local h = rows * item + math.max(rows - 1, 0) * g + (kind == "combined" and 78 + BagLayout.FooterBelow(kind) or kind == "backpack" and 46 + BagLayout.FooterBelow(kind) or 57)
+  if kind == "combined" then h = h + BagLayout.KeySection(keySlots, { cols = c, item = item, gap = g }) + (labelH or 0) end
   return w, h
+end
+
+-- x of the grid's left edge in a window of width w (7 px from the right edge when the window is as wide as grid + 15, centred when it is wider)
+function BagLayout.GridX(w, gridW) return 1 + math.floor((w - gridW) / 2) end
+
+---------------------------------------------------------------- the player's layout (columns, slot size, spacing) and the fit to the screen
+BagLayout.MIN_COLS, BagLayout.MAX_COLS, BagLayout.MIN_SCALE = 4, 20, 0.5
+BagLayout.TOP_MARGIN, BagLayout.BOTTOM_MARGIN = 40, 85 -- the HUD above, the chat / bottom bars below (the bag stack's base is 85 too)
+BagLayout.SIZE_MIN, BagLayout.SIZE_MAX, BagLayout.GAP_MAX = 70, 120, 8
+-- setting keys per window kind: columns (0 = Auto), slot size in % of 37 px, spacing in px
+BagLayout.KEYS = { bags = { cols = "bagColumns", size = "bagSlotSize", gap = "bagSlotGap" }, bank = { cols = "bankColumns", size = "bankSlotSize", gap = "bankSlotGap" } }
+BagLayout.DEFAULTS = { cols = 0, size = 100, gap = 1 }
+
+local function clampInt(v, lo, hi, def)
+  v = tonumber(v)
+  if not v then return def end
+  return math.min(hi, math.max(lo, math.floor(v + 0.5)))
+end
+function BagLayout.CleanCols(v)
+  v = clampInt(v, 0, BagLayout.MAX_COLS, 0)
+  return v < BagLayout.MIN_COLS and 0 or v
+end
+-- Settings of a window kind ("bags" / "bank") from the account settings; a damaged value falls back to the default.
+function BagLayout.Prefs(kind)
+  local k, d = BagLayout.KEYS[kind], BagLayout.DEFAULTS
+  local get = AFUI.GetSetting or function() end
+  local pct = clampInt(get(k.size, d.size), BagLayout.SIZE_MIN, BagLayout.SIZE_MAX, d.size)
+  return { cols = BagLayout.CleanCols(get(k.cols, d.cols)), pct = pct, item = math.floor(ITEM * pct / 100 + 0.5), gap = clampInt(get(k.gap, d.gap), 0, BagLayout.GAP_MAX, d.gap) }
+end
+
+-- Columns, window size and scale for a grid. o = { cols (0 = Auto), base (first Auto try, default 10), size = function(cols) -> w, h, screenW, screenH }.
+-- Auto: the smallest column count from `base` up to MAX_COLS whose window fits the screen (fewer rows), only then the window shrinks (never below
+-- MIN_SCALE). A fixed column count keeps its columns and shrinks. Returns { cols, w, h, scale, auto, fits }.
+function BagLayout.Plan(o)
+  local availH = o.screenH - BagLayout.TOP_MARGIN - BagLayout.BOTTOM_MARGIN
+  local availW = o.screenW - 20
+  local cols, w, h = BagLayout.CleanCols(o.cols), nil, nil
+  local auto = cols == 0
+  if auto then
+    for c = math.min(BagLayout.MAX_COLS, math.max(BagLayout.MIN_COLS, o.base or 10)), BagLayout.MAX_COLS do
+      cols = c; w, h = o.size(c)
+      if h <= availH and w <= availW then break end
+    end
+  else w, h = o.size(cols) end
+  local scale = math.max(BagLayout.MIN_SCALE, math.min(1, availH / h, availW / w))
+  return { cols = cols, w = w, h = h, scale = scale, auto = auto, fits = h * scale <= availH + 0.01 and w * scale <= availW + 0.01 }
 end
 
 -- "Group items by category": a gold label strip (LABEL_H) above the grid row where each category starts. cats[i] = category number (1..5) of the slot in
@@ -88,11 +156,11 @@ function BagLayout.StripsThrough(marks, row)
   return n
 end
 
--- A window taller than the room above the stack's base (85 px) shrinks to fit.
+-- A window taller than the room between the top margin and the stack's base (85 px) shrinks to fit (never below MIN_SCALE).
 function BagLayout.FitScale(h, screenH)
-  local avail = screenH - 85 - 20
+  local avail = screenH - BagLayout.TOP_MARGIN - BagLayout.BOTTOM_MARGIN
   if h <= avail then return 1 end
-  return avail / h
+  return math.max(BagLayout.MIN_SCALE, avail / h)
 end
 
 -- sizes[bag] = slots. { { bag, slot }, ... }: backpack first, then bag 1..4, slots ascending.
@@ -251,6 +319,14 @@ end
 -- Empty slot art: Forever's wing slot for EVERY empty slot (backpack, bags, specialty bags, key ring, combined window). Mat: no bag-family or keychain variants,
 -- no per-bag icon in the combined window. The arguments stay for the callers.
 function Bags.EmptyArt() return "bags-item-slot64-c60-2x" end
+
+-- The empty slot art for any other window (mail attachments, trade, auction create): AFUI.Bags.EmptySlotTexture(texture) paints it on `texture` (stretch the
+-- texture to the slot yourself) and returns the atlas name; with no texture it only returns the name. Same art as every bag / bank slot: this is the one place that names it.
+function Bags.EmptySlotTexture(texture)
+  local name = Bags.EmptyArt()
+  if texture then AFUI.SetAtlas(texture, name) end
+  return name
+end
 
 -- bag family flags of a held bag (0 = general); GetContainerNumFreeSlots returns free, family
 function Bags.BagType(bag)
@@ -772,6 +848,7 @@ end
 function IL.UpdateSlot(btn)
   local id = btn and btn.GetID and btn:GetID()
   if not (id and IL.CHAR[id] and btn:GetName() == IL.CHAR[id]) then return end
+  if not (AFUI.ModuleEnabled("bags") and AFUI.ModuleEnabled("character")) then return end -- the client's own Character window (or another bag addon) is left as it is
   IL.Set(btn, _G.GetInventoryItemLink and GetInventoryItemLink("player", id), "char", on("charItemLevel"))
 end
 
@@ -1093,10 +1170,10 @@ function Bags.SlotCategories(list)
 end
 
 -- The gold labels of "Group items by category": a label and a thin line in the strip above the row where each group starts (strips are BagLayout.LABEL_H high).
-function Bags.DrawCategoryLabels(win, marks, x0, y0, gridW)
+function Bags.DrawCategoryLabels(win, marks, x0, y0, gridW, pitch)
   local pool = win.catLabels
   if not pool then pool = {}; win.catLabels = pool end
-  local pitch = ITEM + gap("combined")
+  pitch = pitch or ITEM + gap("combined")
   for i, m in ipairs(marks) do
     local l = pool[i]
     if not l then
@@ -1238,6 +1315,12 @@ local function skin(win, w, h, portrait)
 end
 
 -- The bag windows' chrome on any frame (the bank): the Rock fill, the grey footer strip under the money, and the metal frame pieces for a w x h window.
+function Bags.FooterLine(win, strip) -- the strip's top edge: a thin gold line, the same as the bank's divider, so the footer reads as its own band
+  local t = win:CreateTexture(nil, "BORDER"); AFUI.SetColor(t, 0.42, 0.34, 0.2, 0.9); t:SetHeight(1)
+  t:SetPoint("TOPLEFT", strip, "TOPLEFT"); t:SetPoint("TOPRIGHT", strip, "TOPRIGHT")
+  return t
+end
+
 function Bags.Chrome(win, w, h, portrait)
   win.pieces = win.pieces or {}
   if not win.rock then
@@ -1245,8 +1328,8 @@ function Bags.Chrome(win, w, h, portrait)
     bg:SetPoint("TOPLEFT", win, "TOPLEFT", 2, -21); bg:SetPoint("BOTTOMRIGHT", win, "BOTTOMRIGHT", -2, 2)
     win.rock = bg
     local foot = win:CreateTexture(nil, "BORDER"); AFUI.SetColor(foot, 0.1, 0.1, 0.11, 0.55)
-    foot:SetPoint("BOTTOMLEFT", win, "BOTTOMLEFT", 3, 3); foot:SetPoint("BOTTOMRIGHT", win, "BOTTOMRIGHT", -3, 3); foot:SetHeight(30)
-    win.footer = foot
+    foot:SetPoint("BOTTOMLEFT", win, "BOTTOMLEFT", 3, 3); foot:SetPoint("BOTTOMRIGHT", win, "BOTTOMRIGHT", -3, 3); foot:SetHeight(BagLayout.FooterHeight("combined"))
+    win.footer = foot; win.footLine = Bags.FooterLine(win, foot)
   end
   skin(win, w, h, portrait)
   win.rock:SetTexCoord(0, (w - 4) / 512, 0, (h - 23) / 512)
@@ -1318,9 +1401,27 @@ local function layout(key)
   local cols = COLS[kind]
   local keyN = key == "combined" and keySlots() or 0
   local marks, labelH = {}, 0
-  if key == "combined" and on("bagGroupCategory") then marks, labelH = BagLayout.GroupMarks(Bags.SlotCategories(list), total, cols) end
-  local w, h = BagLayout.WindowSize(kind, total, keyN, labelH)
-  local scale = BagLayout.FitScale(h, UIParent:GetHeight())
+  local item, g = ITEM, gap(kind)
+  local w, h, scale
+  if key == "combined" then -- the player's layout: columns (Auto = the fewest rows that fit the screen), slot size and spacing, then the window shrinks if it still does not fit
+    local pf = BagLayout.Prefs("bags")
+    item, g = pf.item, pf.gap
+    local grouped = on("bagGroupCategory")
+    local cats = grouped and Bags.SlotCategories(list)
+    local function size(c) -- the category strips are counted for the column count that is tried (they are a few rows high at most)
+      local lh = 0
+      if grouped then lh = select(2, BagLayout.GroupMarks(cats, total, c)) end
+      return BagLayout.WindowSize(kind, total, keyN, lh, { cols = c, item = item, gap = g })
+    end
+    local plan = BagLayout.Plan({ cols = pf.cols, total = total, size = size, screenW = UIParent:GetWidth(), screenH = UIParent:GetHeight() })
+    cols = plan.cols
+    if grouped then marks, labelH = BagLayout.GroupMarks(cats, total, cols) end
+    w, h, scale = plan.w, plan.h, plan.scale
+    win.cols, win.item, win.gap = cols, item, g
+  else
+    w, h = BagLayout.WindowSize(kind, total, keyN, labelH)
+    scale = BagLayout.FitScale(h, UIParent:GetHeight())
+  end
   win.scale = scale
   win:SetScale(scale); win:SetWidth(w); win:SetHeight(h)
   skin(win, w, h)
@@ -1332,13 +1433,13 @@ local function layout(key)
   local extra = (kind == "backpack" or kind == "combined")
   setShown(win.portrait, key ~= "combined")
   setShown(win.search, kind == "combined") -- the search bar belongs to the combined window only (Mat)
-  setShown(win.money, extra); setShown(win.footer, extra); setShown(win.count, key == "combined"); setShown(win.countIcon, key == "combined")
+  setShown(win.money, extra); setShown(win.footer, extra); setShown(win.footLine, extra); setShown(win.count, key == "combined"); setShown(win.countIcon, key == "combined")
   setShown(win.countHit, key == "combined")
   if key == "combined" then setCount(win, list) end
-  local gridW = cols * ITEM + (cols - 1) * gap(kind)
-  local x0 = w - 7 - gridW
+  local gridW = cols * item + (cols - 1) * g
+  local x0 = BagLayout.GridX(w, gridW)
   local rows = BagLayout.Rows(total, cols)
-  local y0 = h - (kind == "backpack" and 52 or extra and 29 or 9) - BagLayout.KeySection(keyN) - labelH - (rows * ITEM + math.max(rows - 1, 0) * gap(kind))
+  local y0 = h - (extra and BagLayout.FooterBelow(kind) or 9) - BagLayout.KeySection(keyN, { cols = cols, item = item, gap = g }) - labelH - (rows * item + math.max(rows - 1, 0) * g)
   -- every holder of this window follows it; buttons past the bag's size hide
   local bagsHere = (key == "combined") and { 0, 1, 2, 3, 4, KEYRING } or { key }
   for _, bag in ipairs(bagsHere) do
@@ -1348,15 +1449,15 @@ local function layout(key)
     for slot, b in pairs(buttons[bag]) do if slot > n then b:Hide() end end
   end
   if key == "combined" then
-    local top = y0 + labelH + rows * ITEM + math.max(rows - 1, 0) * gap(kind) -- the main grid's bottom edge
+    local top = y0 + labelH + rows * item + math.max(rows - 1, 0) * g -- the main grid's bottom edge
     setShown(win.keySep, keyN > 0); setShown(win.keyLabel, keyN > 0)
     if keyN > 0 then
       win.keySep:ClearAllPoints(); win.keySep:SetPoint("TOPLEFT", win, "TOPLEFT", x0, -(top + 5)); win.keySep:SetWidth(gridW)
       win.keyLabel:ClearAllPoints(); win.keyLabel:SetPoint("TOPLEFT", win, "TOPLEFT", x0, -(top + 7))
       for slot = 1, keyN do
         local b = button(KEYRING, slot)
-        b:ClearAllPoints()
-        b:SetPoint("TOPLEFT", win, "TOPLEFT", x0 + ((slot - 1) % cols) * (ITEM + gap(kind)), -(top + KEY_HEAD + math.floor((slot - 1) / cols) * (ITEM + gap(kind))))
+        b:ClearAllPoints(); b:SetWidth(item); b:SetHeight(item)
+        b:SetPoint("TOPLEFT", win, "TOPLEFT", x0 + ((slot - 1) % cols) * (item + g), -(top + KEY_HEAD + math.floor((slot - 1) / cols) * (item + g)))
         b:Show()
         Bags.UpdateButton(b)
       end
@@ -1367,13 +1468,13 @@ local function layout(key)
   for i, e in ipairs(list) do
     local b = button(e[1], e[2])
     local c, r = BagLayout.Cell(i - 1, total, cols)
-    b:ClearAllPoints()
-    b:SetPoint("TOPLEFT", win, "TOPLEFT", x0 + c * (ITEM + gap(kind)), -(y0 + r * (ITEM + gap(kind)) + BagLayout.StripsThrough(marks, r) * BagLayout.LABEL_H))
+    b:ClearAllPoints(); b:SetWidth(item); b:SetHeight(item)
+    b:SetPoint("TOPLEFT", win, "TOPLEFT", x0 + c * (item + g), -(y0 + r * (item + g) + BagLayout.StripsThrough(marks, r) * BagLayout.LABEL_H))
     b:Show()
     Bags.UpdateButton(b)
   end
   if key == "combined" then
-    Bags.DrawCategoryLabels(win, marks, x0, y0, gridW)
+    Bags.DrawCategoryLabels(win, marks, x0, y0, gridW, item + g)
     Bags.UpdateResults()
   end
   if kind == "combined" then -- no portrait and the sort button sits in the footer: the box spans the window
@@ -1382,9 +1483,30 @@ local function layout(key)
   end
   setShown(win.sort, kind == "backpack" or kind == "combined"); setShown(win.currency, kind == "backpack")
   win.sort:ClearAllPoints()
-  if kind == "combined" then win.sort:SetPoint("BOTTOMLEFT", win, "BOTTOMLEFT", 9, 5) else win.sort:SetPoint("TOPRIGHT", win, "TOPRIGHT", -9, -30) end
+  local F, fh = BagLayout.FOOT, BagLayout.FooterHeight(kind)
+  local foot = extra and BagLayout.Footer(kind, w, h) or nil
+  local function below(size) return F.border + math.floor((fh - size) / 2) end -- a footer control of this size, centred in the strip: its offset from the window's bottom
+  win.footer:SetHeight(fh)
+  win.rects = foot -- (specs) every footer control's rectangle, y down from the window's top
+  if kind == "combined" then
+    -- left: Clean Up, Layout gear, the key ring button and the free-slot counter; right: the money box. All centred in the strip, none reaching the money.
+    local x, S = F.inset, 24
+    win.sort:SetPoint("BOTTOMLEFT", win, "BOTTOMLEFT", x, below(S)); foot.sort = { x, h - below(S) - S, S, S }
+    setShown(win.layoutBtn, true)
+    win.layoutBtn:ClearAllPoints(); win.layoutBtn:SetPoint("BOTTOMLEFT", win, "BOTTOMLEFT", x + S + 4, below(S)); foot.gear = { x + S + 4, h - below(S) - S, S, S }
+    x = x + 2 * (S + 4)
+    win.keyBtn:ClearAllPoints(); win.keyBtn:SetPoint("BOTTOMLEFT", win, "BOTTOMLEFT", x, below(20))
+    if numSlots(KEYRING) > 0 then foot.key = { x, h - below(20) - 20, 20, 20 }; x = x + 20 + 6 end
+    win.countIcon:ClearAllPoints(); win.countIcon:SetPoint("BOTTOMLEFT", win, "BOTTOMLEFT", x, below(18))
+    win.count:ClearAllPoints(); win.count:SetPoint("LEFT", win.countIcon, "RIGHT", 4, 0)
+    foot.count = { x, h - below(18) - 18, 18 + 4 + 8 * #(win.count:GetText() or "000/000"), 18 } -- 8 px a character is wider than the digits
+  else
+    win.sort:SetPoint("TOPRIGHT", win, "TOPRIGHT", -9, -30)
+    setShown(win.layoutBtn, false)
+  end
   win.money:ClearAllPoints()
-  win.money:SetPoint("BOTTOMRIGHT", win, "BOTTOMRIGHT", -9, kind == "backpack" and 32 or 9)
+  if foot then win.money:SetPoint("BOTTOMRIGHT", win, "BOTTOMRIGHT", -F.inset, h - foot.money[2] - F.box) end
+  if kind == "backpack" then win.currency:ClearAllPoints(); win.currency:SetPoint("BOTTOMRIGHT", win, "BOTTOMRIGHT", -F.inset, h - foot.currency[2] - F.box) end
   if extra then setMoney(win) end
   if kind == "backpack" then Bags.SetCurrency(win) end
   win.toggle.Refresh()
@@ -1406,6 +1528,9 @@ end
 local function sizeSig()
   local t = { state.combined and "c" or "s", keySlots() }
   for bag = 0, MAX_BAG do t[#t + 1] = numSlots(bag) end
+  local pf = BagLayout.Prefs("bags") -- the player's layout and the screen: a change re-lays the hidden windows out too
+  t[#t + 1] = pf.cols .. ":" .. pf.pct .. ":" .. pf.gap
+  t[#t + 1] = _G.UIParent and (math.floor(UIParent:GetWidth()) .. "x" .. math.floor(UIParent:GetHeight())) or ""
   return table.concat(t, ",")
 end
 
@@ -1567,8 +1692,8 @@ local function makeMoney(win, id)
   local box = CreateFrame("Frame", "AFUI_BagMoney" .. id, win)
   box:SetWidth(168); box:SetHeight(17)
   box:SetPoint("BOTTOMRIGHT", win, "BOTTOMRIGHT", -9, 9)
-  local l = atlasTexture(box, "BACKGROUND", "common-coinbox-left"); l:SetPoint("LEFT", box, "LEFT")
-  local r = atlasTexture(box, "BACKGROUND", "common-coinbox-right"); r:SetPoint("RIGHT", box, "RIGHT")
+  local l = atlasTexture(box, "BACKGROUND", "common-coinbox-left", 8, 17); l:SetPoint("LEFT", box, "LEFT") -- the art is 2x: its bracket is drawn at half size so it fits the 17 px box
+  local r = atlasTexture(box, "BACKGROUND", "common-coinbox-right", 8, 17); r:SetPoint("RIGHT", box, "RIGHT")
   local c = atlasTexture(box, "BACKGROUND", "_common-coinbox-center"); c:SetPoint("TOPLEFT", l, "TOPRIGHT"); c:SetPoint("BOTTOMRIGHT", r, "BOTTOMLEFT")
   local prev = box
   for _, k in ipairs({ { "copper", "UI-CopperIcon" }, { "silver", "UI-SilverIcon" }, { "gold", "UI-GoldIcon" } }) do
@@ -1619,6 +1744,158 @@ function Bags.SetCurrency(win)
   end
 end
 
+---------------------------------------------------------------- the layout popup (the gear): columns, slot size and spacing of the combined bags / bank window
+-- The settings are the single source (Settings window, Edit Mode and this popup all write them); a change re-lays the window out (out of combat, else it waits).
+function Bags.EffectiveCols(kind)
+  if kind == "bank" then local m = Bags.Bank and Bags.Bank.metrics; return m and m.cols or 10 end
+  return windows.combined and windows.combined.cols or COLS.combined
+end
+
+function Bags.LayoutText(kind, field)
+  local pf = BagLayout.Prefs(kind)
+  if field == "cols" then return pf.cols == 0 and ("Auto (" .. Bags.EffectiveCols(kind) .. ")") or tostring(pf.cols) end
+  if field == "size" then return pf.pct .. "%" end
+  return tostring(pf.gap)
+end
+
+function Bags.SetLayoutPref(kind, field, v) AFUI.SetSetting(BagLayout.KEYS[kind][field], v) end
+
+-- dir = -1 / +1. Columns: below 4 is Auto again, from Auto the step starts at the columns in use.
+function Bags.StepLayout(kind, field, dir)
+  local pf = BagLayout.Prefs(kind)
+  local v
+  if field == "cols" then
+    local cur = pf.cols == 0 and Bags.EffectiveCols(kind) or pf.cols
+    v = math.min(BagLayout.MAX_COLS, cur + dir)
+    if v < BagLayout.MIN_COLS then v = 0 end
+  elseif field == "size" then v = math.min(BagLayout.SIZE_MAX, math.max(BagLayout.SIZE_MIN, pf.pct + 10 * dir))
+  else v = math.min(BagLayout.GAP_MAX, math.max(0, pf.gap + dir)) end
+  Bags.SetLayoutPref(kind, field, v)
+end
+
+function Bags.ResetLayout(kind)
+  for field, d in pairs(BagLayout.DEFAULTS) do Bags.SetLayoutPref(kind, field, d) end
+end
+
+-- The popup's geometry (pure, in px from its top left): title, three rows (label, red - / + steppers around the value) and the Reset button.
+-- PopupPlace puts it under (bank) or over (bags) its gear button and keeps it on the screen; o = { l, b, r, t } is the gear's rectangle in screen units.
+BagLayout.POPUP = { w = 178, titleH = 28, rowH = 26, step = 22, resetH = 26, pad = 8, minusX = 74, valueX = 98, valueW = 48, plusX = 148 }
+function BagLayout.PopupRects()
+  local P = BagLayout.POPUP
+  local out = { w = P.w, h = P.titleH + 3 * P.rowH + 6 + P.resetH + P.pad, rows = {} }
+  for i = 1, 3 do
+    local y = P.titleH + (i - 1) * P.rowH + (P.rowH - P.step) / 2
+    out.rows[i] = { minus = { P.minusX, y, P.step, P.step }, value = { P.valueX, y, P.valueW, P.step }, plus = { P.plusX, y, P.step, P.step } }
+  end
+  out.reset = { P.pad, out.h - P.pad - P.resetH, P.w - 2 * P.pad, P.resetH }
+  return out
+end
+function BagLayout.PopupPlace(kind, o, pw, ph, sw, sh)
+  local left, top
+  if kind == "bank" then left, top = o.r - pw, o.b - 2 else left, top = o.l, o.t + 2 + ph end
+  return math.max(0, math.min(left, sw - pw)), math.max(ph, math.min(top, sh)) -- left edge, top edge (y up from the screen's bottom)
+end
+
+local popup
+local function refreshPopup()
+  if not (popup and popup:IsShown()) then return end
+  for _, r in ipairs(popup.rows) do r.value:SetText(Bags.LayoutText(popup.kind, r.field)) end
+end
+Bags.RefreshLayoutPopup = refreshPopup
+
+-- The red Forever button (WinKit.button, the art of the Settings window and the game menu); the flat client look where WinKit is not loaded (specs).
+local function redButton(parent, w, h, text, onClick)
+  local b = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
+  b:SetText(text)
+  if AFUI.WinKit and AFUI.WinKit.button then AFUI.WinKit.button(b, w, h); b.afRed = true end
+  b:SetWidth(w); b:SetHeight(h)
+  b:SetScript("OnClick", onClick)
+  return b
+end
+
+-- A toolbar button of the same look: the red frame with the icon (an atlas) inset, `down` the atlas while pressed. Clean Up and the Layout gear use it.
+function Bags.IconButton(parent, up, down, size)
+  size = size or 24
+  local b = CreateFrame("Button", nil, parent)
+  b:SetWidth(size); b:SetHeight(size); b:SetFrameLevel(parent:GetFrameLevel() + 30)
+  if AFUI.WinKit and AFUI.WinKit.button then AFUI.WinKit.button(b, size, size); b.afRed = true end
+  b.icon = atlasTexture(b, "OVERLAY", up, 16, 16); b.icon.afOwn = true -- afOwn: WinKit's strip leaves our own pieces alone
+  b.icon:SetPoint("CENTER", b, "CENTER", 0, 0)
+  if down then
+    b:HookScript("OnMouseDown", function(self) AFUI.SetAtlas(self.icon, down); self.icon:SetPoint("CENTER", self, "CENTER", 1, -1) end)
+    b:HookScript("OnMouseUp", function(self) AFUI.SetAtlas(self.icon, up); self.icon:SetPoint("CENTER", self, "CENTER", 0, 0) end)
+  end
+  return b
+end
+
+local function mouseDown() return _G.IsMouseButtonDown and (IsMouseButtonDown("LeftButton") or IsMouseButtonDown("RightButton")) and true or false end
+local function mouseOver(f) return f and _G.MouseIsOver and MouseIsOver(f) and true or false end
+-- A press anywhere but on the popup or its gear closes it (no catcher frame: nothing can swallow a click). Polled only while it is shown.
+local function popupTick(self)
+  local down = mouseDown()
+  if down and not self.wasDown and not (mouseOver(self) or mouseOver(self.owner)) then self:Hide() end
+  self.wasDown = down
+end
+
+local function buildPopup()
+  local R = BagLayout.PopupRects()
+  local p = CreateFrame("Frame", "AFUI_BagLayoutPopup", UIParent)
+  p:SetFrameStrata("DIALOG"); p:SetWidth(R.w); p:SetHeight(R.h); p:SetClampedToScreen(true); p:EnableMouse(true); p:Hide()
+  p.rects = R
+  local bg = p:CreateTexture(nil, "BACKGROUND"); bg:SetAllPoints(p); AFUI.SetColor(bg, 0.07, 0.06, 0.05, 0.96)
+  for _, def in ipairs({ { "TOPLEFT", "TOPRIGHT", nil, 1 }, { "BOTTOMLEFT", "BOTTOMRIGHT", nil, 1 }, { "TOPLEFT", "BOTTOMLEFT", 1 }, { "TOPRIGHT", "BOTTOMRIGHT", 1 } }) do
+    local t = p:CreateTexture(nil, "BORDER"); AFUI.SetColor(t, 0.6, 0.5, 0.25, 1); t:SetPoint(def[1], p, def[1]); t:SetPoint(def[2], p, def[2])
+    if def[3] then t:SetWidth(def[3]) end
+    if def[4] then t:SetHeight(def[4]) end
+  end
+  p.title = p:CreateFontString(nil, "OVERLAY", "GameFontNormal"); p.title:SetPoint("TOP", p, "TOP", 0, -8); p.title:SetText("Layout")
+  p.rows = {}
+  local function at(f, r) f:ClearAllPoints(); f:SetPoint("TOPLEFT", p, "TOPLEFT", r[1], -r[2]) end
+  for i, def in ipairs({ { "cols", "Columns" }, { "size", "Slot size" }, { "gap", "Spacing" } }) do
+    local r = R.rows[i]
+    local label = p:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall"); label:SetPoint("LEFT", p, "TOPLEFT", BagLayout.POPUP.pad, -(r.minus[2] + r.minus[4] / 2)); label:SetText(def[2])
+    local minus = redButton(p, r.minus[3], r.minus[4], "-", function() Bags.StepLayout(p.kind, def[1], -1) end); at(minus, r.minus)
+    local value = p:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall"); value:SetWidth(r.value[3]); value:SetJustifyH("CENTER")
+    value:SetPoint("LEFT", p, "TOPLEFT", r.value[1], -(r.value[2] + r.value[4] / 2))
+    local plus = redButton(p, r.plus[3], r.plus[4], "+", function() Bags.StepLayout(p.kind, def[1], 1) end); at(plus, r.plus)
+    p.rows[i] = { field = def[1], value = value, minus = minus, plus = plus }
+  end
+  p.reset = redButton(p, R.reset[3], R.reset[4], "Reset", function() Bags.ResetLayout(p.kind) end); at(p.reset, R.reset)
+  p:SetScript("OnShow", function(self) self.wasDown = mouseDown() end)
+  p:SetScript("OnUpdate", popupTick)
+  if type(_G.UISpecialFrames) == "table" then table.insert(UISpecialFrames, "AFUI_BagLayoutPopup") end -- Escape closes it
+  return p
+end
+
+function Bags.LayoutPopup() return popup end
+function Bags.ToggleLayoutPopup(kind, owner)
+  if popup and popup:IsShown() and popup.owner == owner then popup:Hide(); return end
+  popup = popup or buildPopup()
+  popup.kind, popup.owner = kind, owner
+  popup:ClearAllPoints()
+  local l, sw = owner.GetLeft and owner:GetLeft(), _G.UIParent and UIParent:GetWidth()
+  if l and sw and owner.GetEffectiveScale and UIParent.GetEffectiveScale then -- placed on the screen from the gear's own rectangle (screen units), then kept inside it
+    local k = owner:GetEffectiveScale() / UIParent:GetEffectiveScale()
+    local left, top = BagLayout.PopupPlace(kind, { l = l * k, r = owner:GetRight() * k, b = owner:GetBottom() * k, t = owner:GetTop() * k }, popup:GetWidth(), popup:GetHeight(), sw, UIParent:GetHeight())
+    popup:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", left, top)
+  elseif kind == "bank" then popup:SetPoint("TOPRIGHT", owner, "BOTTOMRIGHT", 0, -2) else popup:SetPoint("BOTTOMLEFT", owner, "TOPLEFT", 0, 2) end
+  popup:Show(); refreshPopup()
+end
+
+-- The gear button of a combined window's toolbar (kind "bags" / "bank"): the red frame, the cog inside.
+function Bags.MakeLayoutButton(win, kind)
+  local b = Bags.IconButton(win, "questlog-icon-setting")
+  b:SetScript("OnClick", function(self) Bags.ToggleLayoutPopup(kind, self) end)
+  b:SetScript("OnEnter", function(self)
+    GameTooltip:SetOwner(self, "ANCHOR_TOP"); GameTooltip:SetText("Layout", 1, 1, 1)
+    GameTooltip:AddLine("Columns, slot size and spacing of this window.", 0.8, 0.8, 0.8, true); GameTooltip:Show()
+  end)
+  b:SetScript("OnLeave", function() GameTooltip:Hide() end)
+  b:HookScript("OnHide", function(self) if popup and popup.owner == self then popup:Hide() end end)
+  win:HookScript("OnHide", function() if popup and popup.owner == b then popup:Hide() end end)
+  return b
+end
+
 local function makeWindow(key)
   local id = (key == "combined") and "Combined" or tostring(key + 2)
   local win = CreateFrame("Frame", "AFUI_BagWindow" .. id, UIParent)
@@ -1631,8 +1908,8 @@ local function makeWindow(key)
   bg:SetPoint("TOPLEFT", win, "TOPLEFT", 2, -21); bg:SetPoint("BOTTOMRIGHT", win, "BOTTOMRIGHT", -2, 2)
   win.rock = bg
   local foot = win:CreateTexture(nil, "BORDER"); AFUI.SetColor(foot, 0.1, 0.1, 0.11, 0.55) -- the bank's grey footer strip under the money
-  foot:SetPoint("BOTTOMLEFT", win, "BOTTOMLEFT", 3, 3); foot:SetPoint("BOTTOMRIGHT", win, "BOTTOMRIGHT", -3, 3); foot:SetHeight(30); foot:Hide()
-  win.footer = foot
+  foot:SetPoint("BOTTOMLEFT", win, "BOTTOMLEFT", 3, 3); foot:SetPoint("BOTTOMRIGHT", win, "BOTTOMRIGHT", -3, 3); foot:SetHeight(BagLayout.FooterHeight("combined")); foot:Hide()
+  win.footer = foot; win.footLine = Bags.FooterLine(win, foot); win.footLine:Hide()
   win.portrait = win:CreateTexture(nil, "ARTWORK")
   AFUI.WindowPortrait(win, win.portrait)
   local tf = CreateFrame("Frame", nil, win); tf:SetAllPoints(win); tf:SetFrameLevel(win:GetFrameLevel() + 25) -- above the metal pieces
@@ -1701,9 +1978,7 @@ local function makeWindow(key)
   win.money = makeMoney(win, id)
   win.currency = makeCurrency(win, id)
   -- sort / clean up (the gold button right of the search box); TBC has no SortBags, so Bags.Sort swaps items out of combat
-  local sb = CreateFrame("Button", nil, win)
-  sb:SetWidth(24); sb:SetHeight(24); sb:SetPoint("TOPRIGHT", win, "TOPRIGHT", -9, -30)
-  AFUI.SetButtonAtlas(sb, { "bags-button-autosort-up", "bags-button-autosort-down", "bags-button-autosort-up" }, 0.4)
+  local sb = Bags.IconButton(win, "bags-button-autosort-up", "bags-button-autosort-down"); sb:SetPoint("TOPRIGHT", win, "TOPRIGHT", -9, -30)
   sb:SetScript("OnClick", function() Bags.CleanUp() end)
   sb:SetScript("OnEnter", function(self)
     GameTooltip:SetOwner(self, "ANCHOR_LEFT"); GameTooltip:SetText(BAG_CLEANUP_BAGS or "Clean Up Bags", 1, 1, 1)
@@ -1712,7 +1987,8 @@ local function makeWindow(key)
   end)
   sb:SetScript("OnLeave", function() GameTooltip:Hide() end)
   win.sort = sb
-  win.search:Hide(); win.money:Hide(); win.currency:Hide(); win.sort:Hide()
+  win.layoutBtn = Bags.MakeLayoutButton(win, "bags")
+  win.search:Hide(); win.money:Hide(); win.currency:Hide(); win.sort:Hide(); win.layoutBtn:Hide()
   windows[key] = win
   return win
 end
@@ -1798,10 +2074,32 @@ function Bags.Setup()
   Bags.Prebuild()
 end
 
+-- Bags: columns / Bank: columns (Auto = the fewest rows that fit the screen), slot size, slot spacing: the Settings window's side of the player's layout.
+function Bags.RegisterLayoutSettings()
+  if not (AFUI.Settings and AFUI.Settings.Register) then return end
+  local cols = { { 0, "Auto" } }
+  for c = BagLayout.MIN_COLS, BagLayout.MAX_COLS do cols[#cols + 1] = { c, tostring(c) } end
+  local sizes = {}
+  for p = BagLayout.SIZE_MIN, BagLayout.SIZE_MAX, 10 do sizes[#sizes + 1] = { p, p == 100 and "100% (normal)" or (p .. "%") } end
+  for _, kind in ipairs({ "bags", "bank" }) do
+    local label, k = kind == "bags" and "Bags" or "Bank", BagLayout.KEYS[kind]
+    local what = kind == "bags" and "the combined bags window" or "the combined bank window"
+    AFUI.Settings.Register{ category = "tooltips", key = k.cols, label = label .. ": columns", type = "dropdown", values = cols, default = 0,
+      tooltip = "How many slots per row in " .. what .. ". Auto picks the fewest rows that fit your screen. The gear button in the window sets it too." }
+    AFUI.Settings.Register{ category = "tooltips", key = k.size, label = label .. ": slot size", type = "dropdown", values = sizes, default = 100,
+      tooltip = "The size of the item slots in " .. what .. "." }
+    AFUI.Settings.Register{ category = "tooltips", key = k.gap, label = label .. ": slot spacing", type = "slider", min = 0, max = BagLayout.GAP_MAX, step = 1, format = "%d px", default = 1,
+      tooltip = "The gap between item slots in " .. what .. "." }
+    if AFUI.ProvideSetting then AFUI.ProvideSetting(k.cols, 0); AFUI.ProvideSetting(k.size, 100); AFUI.ProvideSetting(k.gap, 1) end
+  end
+end
+
 -- Item level on the Character window's slots: the client's own slot update, the window showing, and the equipment events; the settings re-draw.
 function Bags.SetupItemLevel()
-  if _G.CharacterFrame and CharacterFrame.HookScript then CharacterFrame:HookScript("OnShow", IL.UpdateCharacter) end
-  if type(_G.PaperDollItemSlotButton_Update) == "function" then hooksecurefunc("PaperDollItemSlotButton_Update", IL.UpdateSlot) end
+  if AFUI.ModuleEnabled("character") then -- the client's own Character window gets no item levels and no hook of ours
+    if _G.CharacterFrame and CharacterFrame.HookScript then CharacterFrame:HookScript("OnShow", IL.UpdateCharacter) end
+    if type(_G.PaperDollItemSlotButton_Update) == "function" then hooksecurefunc("PaperDollItemSlotButton_Update", IL.UpdateSlot) end
+  end
   if AFUI.QoL then
     AFUI.QoL.Watch("charItemLevel", IL.UpdateCharacter)
     AFUI.QoL.Watch("bagItemLevel", Bags.UpdateAll)
@@ -1809,7 +2107,12 @@ function Bags.SetupItemLevel()
     AFUI.QoL.Watch("bagKeyring", function() if state then Bags.Refresh() end end)
     AFUI.QoL.Watch("bagGroupCategory", function() if state then Bags.Refresh() end end)
     for _, k in ipairs({ "bagQuestMarker", "bagUpgradeArrow", "bagDontSell", "bagGrayJunk", "bagRedUnusable" }) do AFUI.QoL.Watch(k, Bags.UpdateAll) end
+    for _, k in pairs(BagLayout.KEYS.bags) do -- the player's layout: the open window re-lays out (in combat it waits), hidden ones are rebuilt
+      AFUI.QoL.Watch(k, function() if state then Bags.Refresh(); Bags.Prebuild() end; Bags.RefreshLayoutPopup() end)
+    end
+    for _, k in pairs(BagLayout.KEYS.bank) do AFUI.QoL.Watch(k, Bags.RefreshLayoutPopup) end
   end
+  Bags.RegisterLayoutSettings()
   -- Settings.lua loads after this file, so the options are registered here (at login, when every file is in)
   if AFUI.Settings and AFUI.Settings.Register then
     AFUI.Settings.Register{ category = "tooltips", key = "bagGrayJunk", label = "Grey out junk items", default = true,
@@ -1858,6 +2161,9 @@ local function onBagChange()
   end)
 end
 AFUI.On("BAG_UPDATE", onBagChange)
+-- a new resolution / UI scale changes the room: the windows fit again (the open ones now, the hidden ones prebuilt; in combat both wait)
+local function screenChanged() if state then Bags.Refresh(); Bags.Prebuild() end end
+AFUI.On("DISPLAY_SIZE_CHANGED", screenChanged); AFUI.On("UI_SCALE_CHANGED", screenChanged)
 AFUI.On("UNIT_INVENTORY_CHANGED", function(_, unit) if unit == "player" then onBagChange() end end)
 AFUI.On("ITEM_LOCK_CHANGED", function(_, bag, slot)
   local b = bag and buttons[bag] and slot and buttons[bag][slot]

@@ -205,6 +205,7 @@ local function bare(name) return (string.gsub(name or "", "%-.*$", "")) end
 ---------------------------------------------------------------- chat capture (runs with the window closed too)
 local function now() return time and time() or 0 end
 local function record(e)
+  if not AFUI.ModuleEnabled("guild") then return end -- Guild windows switched off: guild chat is not kept for a window that is not drawn
   e.t = e.t or now()
   C.AddLine(hist, e, C.CAP)
   if win and win:IsShown() and state.tab == "chat" then C.RefreshChat() end

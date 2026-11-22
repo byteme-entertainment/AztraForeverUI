@@ -746,11 +746,15 @@ function K.closeOthers(self, names)
   end
 end
 -- Frames a client loads later (the talent UI) are picked up on ADDON_LOADED.
+-- The window switch of each left window (AddonCompat.lua): a window that is the client's own gets no hook of ours (opening ours still closes it).
+K.WINDOW_GROUP = { CharacterFrame = "character", SpellBookFrame = "spellbook", PlayerTalentFrame = "talents", FriendsFrame = "social", LFGParentFrame = "lfg",
+  QuestLogFrame = "map", TradeSkillFrame = "professions", CraftFrame = "professions", AFUI_ProfessionsFrame = "professions" }
 function K.exclusive(names)
   names = names or K.LEFT_WINDOWS
   for _, n in ipairs(names) do
     local f = g(n)
-    if f and f.HookScript and not f.afExclusive then
+    local group = K.WINDOW_GROUP[n]
+    if f and f.HookScript and not f.afExclusive and (not group or AFUI.ModuleEnabled(group)) then
       f.afExclusive = true
       f:HookScript("OnShow", function(self) K.closeOthers(self, names) end)
     end

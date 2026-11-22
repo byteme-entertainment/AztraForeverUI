@@ -416,6 +416,9 @@ local function party()
       { id = "useClassColors", type = "checkbox", label = "Use Class Colors", show = raid },
       { id = "onlyDispellable", type = "checkbox", label = "Display Only Dispellable Debuffs", show = raid },
       { id = "healthText", type = "dropdown", label = "Health Text", options = CP and CP.HEALTH_TEXT or { "None" }, show = raid },
+      -- which buffs and debuffs the icons show: the Aura Filters window (AuraFilters.lua / AuraFilterUI.lua)
+      { id = "auraFilters", type = "button", label = "Aura Filters...", show = function(s) return raid(s) and AFUI.AuraFilters ~= nil and AFUI.AuraFilters.UI ~= nil end,
+        onClick = function() AFUI.AuraFilters.UI.Open("party") end },
       scale },
     defaults = defaults,
     apply = function(entry)
@@ -497,11 +500,11 @@ function EM.RegisterAll()
   if AFUI.HudTooltip and ours("tooltips") then
     EM.Register("hudtooltip", { frame = AFUI.HudTooltip, label = "HUD Tooltip", noScale = true, group = "hudtooltip" })
   end
-  if AFUI.BuffAnchor then
+  if AFUI.BuffAnchor and ours("buffs") then
     EM.Register("buffs", { frame = AFUI.BuffAnchor, label = "Buffs and Debuffs", scaleLabel = "Icon Size", group = "buffs",
       apply = function(entry) EM.Place(entry) end })
   end
-  if AFUI.Tracker then -- Forever's Objective Tracker: Size and Hidden (the column hangs from this box, Tracker.lua)
+  if AFUI.Tracker and ours("tracker") then -- Forever's Objective Tracker: Size and Hidden (the column hangs from this box, Tracker.lua)
     EM.Register("tracker", { frame = AFUI.Tracker.frame, label = "Objective Tracker", defaults = { hidden = false },
       enabled = function() return not AFUI.Tracker.Inert() end, -- not listed while Questie's tracker is on
       settingsSchema = { { id = "hidden", type = "checkbox", label = "Hidden" } },
@@ -527,22 +530,42 @@ function EM.RegisterAll()
     local MODES, MODE_KEYS = AFUI.BAG_BAR_MODES or {}, {}
     for k, label in pairs(MODES) do MODE_KEYS[label] = k end
     local function modeLabel() return MODES[AFUI.BagBarMode and AFUI.BagBarMode() or "full"] or "Full row" end
+    -- the combined windows' columns (Auto or 4..20), the same account settings as the Settings window and the gear in the windows
+    local COL_OPTS, BL = { "Auto" }, AFUI.BagLayout
+    for c = (BL and BL.MIN_COLS or 4), (BL and BL.MAX_COLS or 20) do COL_OPTS[#COL_OPTS + 1] = tostring(c) end
+    local COL_FIELDS = { bagColumns = "bags", bankColumns = "bank" }
+    local function colLabel(kind) local v = BL and BL.Prefs(kind).cols or 0; return v == 0 and "Auto" or tostring(v) end
     EM.Register("bags", { frame = AFUI.BagBar, label = "Bags", settingsSchema = { { id = "combineBags", type = "checkbox", label = "Combine Bags", show = function() return ours("bags") end },
+        { id = "bagColumns", type = "dropdown", label = "Bags: Columns", options = COL_OPTS, show = function() return ours("bags") and BL ~= nil end },
+        { id = "bankColumns", type = "dropdown", label = "Bank: Columns", options = COL_OPTS, show = function() return ours("bags") and BL ~= nil end },
         { id = "barMode", type = "dropdown", label = "Bag Bar", options = { "Full row", "Single icon", "Hidden" } } },
-      defaults = { combineBags = B and B.IsCombined() or false, barMode = "Full row" },
+      defaults = { combineBags = B and B.IsCombined() or false, barMode = "Full row", bagColumns = "Auto", bankColumns = "Auto" },
       apply = function(entry)
-        -- Both are views of account settings: they read the setting back, except right after the player changed one here (change() applies first, then tells the
+        -- All are views of account settings: they read the setting back, except right after the player changed one here (change() applies first, then tells the
         -- watcher below, which writes the player's choice to the setting)
         if not (EM.dirtyKeys and EM.dirtyKeys.bags) then
           EM.current.systems.bags.combineBags = B and B.IsCombined() or false
           EM.current.systems.bags.barMode = modeLabel()
+          EM.current.systems.bags.bagColumns, EM.current.systems.bags.bankColumns = colLabel("bags"), colLabel("bank")
         end
         EM.Place(entry)
       end })
     EM.Watch(function(key, field)
       if key == "bags" and field == "combineBags" and B then B.SetCombined(EM.current.systems.bags.combineBags) end
       if key == "bags" and field == "barMode" and AFUI.SetBagBarMode then AFUI.SetBagBarMode(MODE_KEYS[EM.current.systems.bags.barMode]) end
+      if key == "bags" and COL_FIELDS[field] and BL then
+        local label = EM.current.systems.bags[field]
+        AFUI.SetSetting(BL.KEYS[COL_FIELDS[field]].cols, label == "Auto" and 0 or BL.CleanCols(tonumber(label)))
+      end
     end)
+    for field, kind in pairs(COL_FIELDS) do
+      if BL then
+        AFUI.OnSettingChanged(BL.KEYS[kind].cols, function() -- changed with the gear or in the Settings window: the open Edit Mode box follows
+          local cur = EM.current and EM.current.systems and EM.current.systems.bags
+          if cur then cur[field] = colLabel(kind) end
+        end)
+      end
+    end
     AFUI.OnSettingChanged("bagBarMode", function() -- changed in the Settings window: the open Edit Mode box follows
       local cur = EM.current and EM.current.systems and EM.current.systems.bags
       if cur then cur.barMode = modeLabel() end
@@ -553,7 +576,7 @@ function EM.RegisterAll()
   unit("targettarget", "targettarget", "Target of Target", SMALL_UNIT, "targetfocus"); unit("pet_frame", "pet", "Pet Frame", SMALL_UNIT, "petframe")
   party()
   castbar()
-  plain("minimap", "Minimap", AFUI.MinimapFrame)
+  if ours("minimap") then plain("minimap", "Minimap", AFUI.MinimapFrame) end
   blizz("durability", "Equipment Durability", "DurabilityFrame", "durability")
   blizz("durationbars", "Duration Bars", "MirrorTimer1", "durationbars") -- breath / fatigue bars; the others hang under the first
   blizz("raidwarnings", "Raid Warnings", "RaidWarningFrame", "raidwarnings")

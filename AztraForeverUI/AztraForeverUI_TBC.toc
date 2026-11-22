@@ -1,8 +1,8 @@
 ## Interface: 20503
 ## Title: Aztra's Forever UI
-## Notes: Forever-style interface for WoW TBC. Specifically designed for Crusader-Storm. Version 0.94 Beta.
+## Notes: Forever-style interface for WoW TBC. Specifically designed for Crusader-Storm. Version 0.95 Beta.
 ## Author: Aztra
-## Version: 0.94-beta
+## Version: 0.95-beta
 ## SavedVariables: AztraForeverUIDB
 ## SavedVariablesPerCharacter: AztraForeverUICharDB
 
@@ -75,3 +75,8 @@ AuctionFrame.lua
 Mounts.lua
 PetPane.lua
 AnchorCompat.lua
+MailTools.lua
+AuctionTools.lua
+NameplateGrid.lua
+AuraFilters.lua
+AuraFilterUI.lua

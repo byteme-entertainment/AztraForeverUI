@@ -14,7 +14,8 @@ AFUI.Bank = B
 
 B.ITEM, B.GAP, B.PAD_X, B.GRID_TOP = 37, 10, 20, 40
 B.BAG, B.BAG_GAP, B.BAG_LABEL_W = 28, 4, 74
-B.PURCHASE_H, B.FOOTER = 72, 33
+B.PURCHASE_H = 72
+B.FOOTER = AFUI.BagLayout.FOOT.border + AFUI.BagLayout.FooterHeight("bank") -- the footer strip and the frame border under it (Bags.lua: BagLayout.Footer)
 local BANK_CONTAINER = -1
 
 -- Pure geometry. Returns { w, h, cols, rows, item(i) = x, y, bag(j) = x, y, divider, bagY, purchaseY } (y from the window's top, positive down).
@@ -28,6 +29,7 @@ function B.Metrics(nItems, nBags, hasPurchase)
   m.bagY = m.divider + 14
   m.purchaseY = m.bagY + B.BAG + 6
   m.h = m.purchaseY + (hasPurchase and B.PURCHASE_H or 0) + 6 + B.FOOTER
+  m.footer = AFUI.BagLayout.Footer("bank", m.w, m.h); m.coinY = m.footer.money[2]
   function m.item(i) return B.PAD_X + ((i - 1) % cols) * (B.ITEM + B.GAP), B.GRID_TOP + math.floor((i - 1) / cols) * (B.ITEM + B.GAP) end
   function m.bag(j) return B.PAD_X + B.BAG_LABEL_W + (j - 1) * (B.BAG + B.BAG_GAP), m.bagY end
   return m
@@ -35,20 +37,46 @@ end
 
 -- "Combine bank bags" (the default): the window the combined bags use (10 columns, 1 px gaps, search box and Clean Up button under the title): the 28 bank slots first,
 -- then every slot of the bought bank bags, then the divider, the "Bag Slots" row and the purchase row. Same return shape as Metrics (item(i) is the i-th slot of B.List()).
-B.COLS, B.CGAP, B.CTOP = 10, 1, 60
-function B.CombinedMetrics(total, hasPurchase)
+-- The size is computed from the player's layout (columns: Auto or 4..20, slot size, spacing: BagLayout.Prefs("bank")) and the screen (BagLayout.Plan: Auto columns grow first
+-- to cut the rows, only then the window scales down), top to bottom: title, search + toolbar row (Clean Up, Layout gear), grid, divider, "Bag Slots" row, purchase row, footer
+-- (money). m.rects lists every control's rectangle { x, y, w, h } inside the window (y down) for the specs: nothing leaves the window and nothing overlaps.
+-- o (tests) = { prefs, screenW, screenH }.
+B.COLS, B.CGAP, B.CTOP, B.MIN_W, B.PURCHASE_W, B.TOOL = 10, 1, 60, 340, 300, 24
+function B.CombinedMetrics(total, hasPurchase, o)
+  o = o or {}
   local L = AFUI.BagLayout
-  local cols = B.COLS
-  local m = { cols = cols, rows = L.Rows(total, cols), combined = true }
-  m.w = cols * B.ITEM + (cols - 1) * B.CGAP + 15
-  local gridH = m.rows * B.ITEM + (m.rows - 1) * B.CGAP
-  m.divider = B.CTOP + gridH + 8
-  m.bagY = m.divider + 12
-  m.purchaseY = m.bagY + B.BAG + 6
-  m.h = m.purchaseY + (hasPurchase and B.PURCHASE_H or 0) + 6 + B.FOOTER
-  m.scale = L.FitScale(m.h, _G.UIParent and UIParent:GetHeight() or 768)
-  function m.item(i) local c, r = L.Cell(i - 1, total, cols); return m.w - 7 - (cols * B.ITEM + (cols - 1) * B.CGAP) + c * (B.ITEM + B.CGAP), B.CTOP + r * (B.ITEM + B.CGAP) end
+  local pf = o.prefs or L.Prefs("bank")
+  local item, g = pf.item, pf.gap
+  local function dims(c) -- window width, divider y, bag row y, purchase row y, height for c columns
+    local rows = L.Rows(total, c)
+    local gridW, gridH = c * item + (c - 1) * g, rows * item + (rows - 1) * g
+    local divider = B.CTOP + gridH + 8
+    local bagY = divider + 12
+    local purchaseY = bagY + B.BAG + 6
+    return math.max(gridW + 15, B.MIN_W), purchaseY + (hasPurchase and B.PURCHASE_H or 0) + 6 + B.FOOTER, divider, bagY, purchaseY
+  end
+  local plan = L.Plan({ cols = pf.cols, total = total, screenW = o.screenW or (_G.UIParent and UIParent:GetWidth() or 1024), screenH = o.screenH or (_G.UIParent and UIParent:GetHeight() or 768),
+    size = function(c) local w, h = dims(c); return w, h end })
+  local cols = plan.cols
+  local m = { cols = cols, rows = L.Rows(total, cols), combined = true, item_size = item, gap = g, scale = plan.scale, fits = plan.fits, auto = plan.auto }
+  m.w, m.h, m.divider, m.bagY, m.purchaseY = dims(cols)
+  local gridW, gridH = cols * item + (cols - 1) * g, m.rows * item + (m.rows - 1) * g
+  m.gridX = L.GridX(m.w, gridW)
+  function m.item(i) local c, r = L.Cell(i - 1, total, cols); return m.gridX + c * (item + g), B.CTOP + r * (item + g) end
   function m.bag(j) return B.PAD_X + B.BAG_LABEL_W + (j - 1) * (B.BAG + B.BAG_GAP), m.bagY end
+  local T = B.TOOL
+  m.sortX, m.gearX = m.w - 9 - T, m.w - 9 - T - 6 - T -- the toolbar row: search box, Layout gear, Clean Up (right to left)
+  m.searchX, m.searchW = 62, m.gearX - 6 - 62
+  m.footer = AFUI.BagLayout.Footer("bank", m.w, m.h); m.coinY = m.footer.money[2]
+  m.rects = {
+    title = { m.w / 2 - 70, 6, 140, 14 }, close = { m.w - 28, 0, 28, 25 },
+    search = { m.searchX - 4, 30, m.searchW + 8, 24 }, gear = { m.gearX, 30, T, T }, sort = { m.sortX, 30, T, T },
+    grid = { m.gridX, B.CTOP, gridW, gridH }, divider = { B.PAD_X, m.divider, m.w - 2 * B.PAD_X, 1 },
+    bagLabel = { B.PAD_X, m.bagY, 66, B.BAG },
+    footer = m.footer.strip, coin = m.footer.money, sorting = { AFUI.BagLayout.FOOT.inset, m.coinY + 2.5, 60, 12 }, -- "Sorting..." sits on the strip's left, centred like the money
+  }
+  for j = 1, 7 do local x, y = m.bag(j); m.rects["bag" .. j] = { x, y, B.BAG, B.BAG } end
+  if hasPurchase then m.rects.purchase = { m.w / 2 - 4 - B.PURCHASE_W / 2, m.purchaseY - 2, B.PURCHASE_W, B.PURCHASE_H } end
   return m
 end
 
@@ -56,7 +84,7 @@ end
 function B.CoinBox(host)
   local coin = CreateFrame("Frame", nil, host); coin:SetWidth(168); coin:SetHeight(17); coin:SetFrameLevel(host:GetFrameLevel() + 2)
   for _, def in ipairs({ { "common-coinbox-left", "LEFT" }, { "common-coinbox-right", "RIGHT" } }) do
-    local t = coin:CreateTexture(nil, "BACKGROUND"); AFUI.SetAtlas(t, def[1], true); t:SetPoint(def[2], coin, def[2])
+    local t = coin:CreateTexture(nil, "BACKGROUND"); AFUI.SetAtlas(t, def[1]); t:SetWidth(8); t:SetHeight(17); t:SetPoint(def[2], coin, def[2]) -- the art is 2x: its bracket is drawn at half size so it fits the 17 px box
   end
   local mid = coin:CreateTexture(nil, "BACKGROUND"); AFUI.SetAtlas(mid, "_common-coinbox-center")
   mid:SetPoint("TOPLEFT", coin, "TOPLEFT", 8, 0); mid:SetPoint("BOTTOMRIGHT", coin, "BOTTOMRIGHT", -8, 0)
@@ -96,11 +124,25 @@ function B.SortSlots()
   return out
 end
 
+-- Everything the window's size depends on: the bank bags' slot counts, the player's layout and the screen.
 local function sizeSig()
   local _, nb = counts()
   local t = {}
   for id = BAG0 + 1, BAG0 + nb do t[#t + 1] = GetContainerNumSlots(id) or 0 end
+  local pf = AFUI.BagLayout.Prefs("bank")
+  t[#t + 1] = pf.cols .. ":" .. pf.pct .. ":" .. pf.gap
+  t[#t + 1] = _G.UIParent and (math.floor(UIParent:GetWidth()) .. "x" .. math.floor(UIParent:GetHeight())) or ""
   return table.concat(t, ",")
+end
+
+-- A bought bank bag whose slot count the client has not reported yet (0): its slots are missing from the grid until it does.
+function B.PendingData()
+  if not _G.GetNumBankSlots then return false end
+  local bought = GetNumBankSlots() or 0
+  for id = BAG0 + 1, BAG0 + math.min(bought, select(2, counts())) do
+    if (GetContainerNumSlots(id) or 0) == 0 then return true end
+  end
+  return false
 end
 
 local function bagButton(i)
@@ -155,6 +197,7 @@ function B.Layout()
   B.metrics, B.sig = m, sizeSig()
   local scale = m.scale or 1
   f:SetScale(scale); f:SetWidth(m.w); f:SetHeight(m.h)
+  if f.SetClampedToScreen then f:SetClampedToScreen(true) end -- never off the screen, whatever spot the player dragged it to
   if f.SetHitRectInsets then f:SetHitRectInsets(0, 0, 0, 0) end
   AFUI.Bags.Chrome(f, m.w, m.h, true)
   -- the bank bags' own slots (Bags buttons with the bank bag container ids) live in this window while it is combined, else they are put away
@@ -168,7 +211,7 @@ function B.Layout()
     for i, e in ipairs(list) do
       local b = e[1] == BANK_CONTAINER and itemButton(e[2]) or AFUI.Bags.Button(e[1], e[2])
       if b then
-        local x, y = m.item(i); place(b, x, y, B.ITEM)
+        local x, y = m.item(i); place(b, x, y, m.item_size)
         if e[1] ~= BANK_CONTAINER then b:Show(); AFUI.Bags.UpdateButton(b) end
       end
     end
@@ -179,17 +222,34 @@ function B.Layout()
   B.divider:ClearAllPoints()
   B.divider:SetPoint("TOPLEFT", f, "TOPLEFT", B.PAD_X, -m.divider); B.divider:SetPoint("TOPRIGHT", f, "TOPRIGHT", -B.PAD_X, -m.divider)
   B.bagLabel:ClearAllPoints(); B.bagLabel:SetPoint("LEFT", f, "TOPLEFT", B.PAD_X, -(m.bagY + B.BAG / 2))
-  setShown(B.search, combined); setShown(B.sort, combined)
-  B.search:ClearAllPoints(); B.search:SetPoint("TOPLEFT", f, "TOPLEFT", 62, -33); B.search:SetWidth(m.w - 62 - 40)
+  setShown(B.search, combined); setShown(B.sort, combined); setShown(B.layoutBtn, combined)
+  if combined then
+    B.search:ClearAllPoints(); B.search:SetPoint("TOPLEFT", f, "TOPLEFT", m.searchX, -33); B.search:SetWidth(m.searchW)
+    B.sort:ClearAllPoints(); B.sort:SetPoint("TOPLEFT", f, "TOPLEFT", m.sortX, -30)
+    B.layoutBtn:ClearAllPoints(); B.layoutBtn:SetPoint("TOPLEFT", f, "TOPLEFT", m.gearX, -30)
+  end
   if B.search:GetText() ~= AFUI.Bags.searchText then B.search:SetText(AFUI.Bags.searchText) end
   local p = _G.BankFramePurchaseInfo
-  if p then p:ClearAllPoints(); p:SetPoint("TOP", f, "TOP", -4, -m.purchaseY + 2) end
-  local money = _G.BankFrameMoneyFrame
-  if money then money:ClearAllPoints(); money:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -14, 12) end
-  B.coin:ClearAllPoints(); B.coin:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -9, 9)
-  if AFUI.PanelAttrs and AFUI.WinKit and AFUI.WinKit.ORIGIN then
-    AFUI.PanelAttrs(f, { width = m.w * scale, height = m.h * scale, xoffset = AFUI.WinKit.ORIGIN.x, yoffset = AFUI.WinKit.ORIGIN.y })
+  if p then
+    p:ClearAllPoints(); p:SetPoint("TOP", f, "TOP", -4, -m.purchaseY + 2)
+    if combined and p.SetWidth then p:SetWidth(B.PURCHASE_W) end -- the client's frame is sized for its own window: here it stays inside ours
   end
+  -- the footer is anchored from the TOP with the computed height, not from the bottom: it cannot end up inside the grid whatever the client does to the frame's own size
+  local money = _G.BankFrameMoneyFrame
+  local F = AFUI.BagLayout.FOOT
+  if money then money:ClearAllPoints(); money:SetPoint("RIGHT", f, "TOPRIGHT", -(F.inset + 4), -(m.coinY + F.box / 2)) end -- centred on the coin box whatever height the client gives its frame
+  B.coin:ClearAllPoints(); B.coin:SetPoint("TOPRIGHT", f, "TOPRIGHT", -F.inset, -m.coinY)
+  B.sorting:ClearAllPoints(); B.sorting:SetPoint("LEFT", f, "TOPLEFT", F.inset, -(m.coinY + F.box / 2))
+  if AFUI.PanelAttrs and AFUI.WinKit and AFUI.WinKit.ORIGIN then
+    -- the panel opens at ORIGIN; a window too tall for that spot moves up (never above the top margin) so its bottom stays above the chat / bottom bars
+    local L, O = AFUI.BagLayout, AFUI.WinKit.ORIGIN
+    local top = O.y
+    if combined and _G.UIParent then top = -math.max(L.TOP_MARGIN, math.min(-O.y, UIParent:GetHeight() - L.BOTTOM_MARGIN - m.h * scale)) end
+    AFUI.PanelAttrs(f, { width = m.w * scale, height = m.h * scale, xoffset = O.x, yoffset = top, bottomClampOverride = combined and L.BOTTOM_MARGIN or nil })
+  end
+  -- the frame's real size after all this (a UIPanel manager or another addon may have resized it): put it right again
+  if f.GetHeight and math.abs((f:GetHeight() or m.h) - m.h) > 0.5 then f:SetHeight(m.h) end
+  if f.GetWidth and math.abs((f:GetWidth() or m.w) - m.w) > 0.5 then f:SetWidth(m.w) end
 end
 
 -- Blizzard's own windows for the bank bags (ContainerFrame5..): never shown while the bank combines them.
@@ -238,9 +298,7 @@ function B.Setup()
   B.coin = B.CoinBox(f)
   -- search box (the combined bags window's own, shared text) and the Clean Up button beside it, "Sorting..." in the footer while a run is going
   B.search = AFUI.Bags.MakeSearch(f, "Bank")
-  local sb = CreateFrame("Button", nil, f)
-  sb:SetWidth(24); sb:SetHeight(24); sb:SetPoint("TOPRIGHT", f, "TOPRIGHT", -9, -30); sb:SetFrameLevel(f:GetFrameLevel() + 30)
-  AFUI.SetButtonAtlas(sb, { "bags-button-autosort-up", "bags-button-autosort-down", "bags-button-autosort-up" }, 0.4)
+  local sb = AFUI.Bags.IconButton(f, "bags-button-autosort-up", "bags-button-autosort-down"); sb:SetPoint("TOPRIGHT", f, "TOPRIGHT", -9, -30)
   sb:SetScript("OnClick", function() AFUI.Bags.CleanUp(B.SortSlots(), B.Shown) end)
   sb:SetScript("OnEnter", function(self)
     GameTooltip:SetOwner(self, "ANCHOR_LEFT"); GameTooltip:SetText("Clean Up Bank", 1, 1, 1)
@@ -250,7 +308,8 @@ function B.Setup()
   sb:SetScript("OnLeave", function() GameTooltip:Hide() end)
   B.sort = sb
   B.sorting = tf:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-  B.sorting:SetText("Sorting..."); B.sorting:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 12, 12); B.sorting:Hide()
+  B.sorting:SetText("Sorting..."); B.sorting:Hide() -- Layout anchors it in the footer
+  B.layoutBtn = AFUI.Bags.MakeLayoutButton(f, "bank") -- the gear left of Clean Up: columns, slot size and spacing
   local money = _G.BankFrameMoneyFrame
   if money then money:SetFrameLevel(f:GetFrameLevel() + 6) end
   -- the slots
@@ -273,6 +332,9 @@ function B.Setup()
   if AFUI.QoL then
     AFUI.QoL.Watch("bagItemLevel", B.Update); AFUI.QoL.Watch("bagNewGlow", B.Update)
     AFUI.QoL.Watch("bankCombine", function() if f:IsShown() then B.Apply() end end)
+    for _, k in pairs(AFUI.BagLayout.KEYS.bank) do -- the player's layout: re-laid out at once out of combat, else when it ends (B.Apply waits)
+      AFUI.QoL.Watch(k, function() if f:IsShown() then B.Apply() end; AFUI.Bags.RefreshLayoutPopup() end)
+    end
   end
   -- Settings.lua loads after this file: the option is registered at login
   if AFUI.Settings and AFUI.Settings.Register then
@@ -281,13 +343,26 @@ function B.Setup()
   end
   if AFUI.ProvideSetting then AFUI.ProvideSetting("bankCombine", true) end
   -- a bank bag swapped or bought changes the grid: lay it out again (one frame after a burst of events, out of combat)
+  -- Root cause guard: the frame size comes from the slot counts the client reports AT LAYOUT TIME, and the bank bags' sizes can arrive after the window opened (a first
+  -- layout with 0 slots in a bought bag gives a window too short for the grid). So BANKFRAME_OPENED always gets a second pass on the next frame, every event that can change a
+  -- count (BAG_UPDATE, PLAYERBANKBAGSLOTS_CHANGED, PLAYERBANKSLOTS_CHANGED), and a screen change (resolution / UI scale), re-lay out when the signature differs; while a bought
+  -- bank bag still reports 0 slots the pass repeats (at most 5 frames).
   local pend = CreateFrame("Frame")
-  local function sizeChanged()
-    if pend.queued or not (B.Shown() and B.Combined()) or sizeSig() == B.sig then return end
+  local function queue(force)
+    if pend.queued or not B.Shown() or not (force or B.Combined() and sizeSig() ~= B.sig) then return end
     pend.queued = true
-    pend:SetScript("OnUpdate", function(self) self:SetScript("OnUpdate", nil); self.queued = nil; if B.Shown() then B.Apply() end end)
+    pend:SetScript("OnUpdate", function(self)
+      self:SetScript("OnUpdate", nil); self.queued = nil
+      if not B.Shown() then return end
+      B.Apply()
+      if B.Combined() and B.PendingData() and (self.tries or 0) < 5 then self.tries = (self.tries or 0) + 1; queue(true) else self.tries = nil end
+    end)
   end
-  AFUI.On("BAG_UPDATE", sizeChanged); AFUI.On("PLAYERBANKBAGSLOTS_CHANGED", sizeChanged)
+  B.Queue = queue
+  local function sizeChanged() queue(false) end
+  AFUI.On("BAG_UPDATE", sizeChanged); AFUI.On("PLAYERBANKBAGSLOTS_CHANGED", sizeChanged); AFUI.On("PLAYERBANKSLOTS_CHANGED", sizeChanged)
+  AFUI.On("DISPLAY_SIZE_CHANGED", sizeChanged); AFUI.On("UI_SCALE_CHANGED", sizeChanged)
+  AFUI.On("BANKFRAME_OPENED", function() queue(true) end)
   if f:IsShown() then B.Apply() end
 end
 

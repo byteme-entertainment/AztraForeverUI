@@ -364,6 +364,38 @@ function AFUI.Bar.Place(tex, frame, inset, frac, atlas, art, opt)
   return w
 end
 
+-- Measuring (2.5.3: a Blizzard nameplate frame and its children refuse every measurement from addon code)
+-- The refusal is not a Lua error a pcall can swallow: the client calls the error handler itself ("Action[FrameMeasurement] failed because[Can't measure
+-- restricted regions]"), so a restricted frame must never be asked. A frame that reports IsForbidden(), one registered with AFUI.NoMeasure (plate.UnitFrame
+-- and its bars, the Blizzard-created plate children) and one that already refused once are never measured; the answer is nil. Reported once, in /afui anchors.
+local noMeasure = setmetatable({}, { __mode = "k" })
+AFUI.MeasureReport = { n = 0 }
+function AFUI.NoMeasure(f) if f then noMeasure[f] = true end end
+function AFUI.MeasureBlocked(f)
+  if f == nil or noMeasure[f] then return true end
+  local fb = type(f) == "table" and f.IsForbidden
+  if type(fb) == "function" then
+    local ok, v = pcall(fb, f)
+    if not ok or v then noMeasure[f] = true; return true end
+  end
+  return false
+end
+-- First five results of a measuring method (GetPoint, GetLeft, GetRect, GetWidth, GetFrameLevel ...), nil for a restricted frame or one that throws.
+function AFUI.SafeMeasure(f, method, ...)
+  if AFUI.MeasureBlocked(f) then return end
+  local fn = f[method]
+  if type(fn) ~= "function" then return end
+  local ok, a, b, c, d, e = pcall(fn, f, ...)
+  if not ok then
+    noMeasure[f] = true
+    local r = AFUI.MeasureReport
+    r.n = r.n + 1
+    r.first = r.first or tostring(a)
+    return
+  end
+  return a, b, c, d, e
+end
+
 -- Puts `text` in the FontString, cut to `width` with "..." (a fixed one-line strip: no wrapping, never wider than the strip).
 -- Measured with GetStringWidth, so it holds on both clients whatever SetWordWrap does. Returns the shown text.
 function AFUI.FitText(fs, text, width)
@@ -477,7 +509,7 @@ local function settingTable(db, create)
   return db.settings
 end
 local function accountSettings(create)
-  if create and type(_G.AztraForeverUIDB) ~= "table" then _G.AztraForeverUIDB = {} end -- SavedVariables are loaded before any addon file runs: this only fills a missing table
+  if create and type(_G.AztraForeverUIDB) ~= "table" then _G.AztraForeverUIDB = {} end -- the client loads the SavedVariables AFTER the addon's files ran (just before ADDON_LOADED): never write or decide anything from them at file load; this only fills a missing table
   return settingTable(_G.AztraForeverUIDB, create)
 end
 local function charSettings(create) return settingTable(_G.AztraForeverUICharDB, create) end

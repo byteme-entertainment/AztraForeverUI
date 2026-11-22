@@ -864,6 +864,6 @@ end
 
 function S.Setup() AFUI.RunOutOfCombat(setup) end
 AFUI.On("ADDON_LOADED", function(_, name)
-  if name == "Blizzard_RaidUI" then AFUI.RunOutOfCombat(skinRaidUI) end
+  if name == "Blizzard_RaidUI" and AFUI.ModuleEnabled("social") then AFUI.RunOutOfCombat(skinRaidUI) end -- switched off: the client's own raid page stays
 end)
 AFUI.RegisterModule("SocialFrame", { OnLogin = S.Setup })

@@ -68,15 +68,33 @@ AFUI.On("UPDATE_BINDINGS", Queue)
 -- uses J for something else is never overridden. An earlier version used SHIFT-J: that binding moves to J the same way. Keys never fire while an edit box has focus.
 BINDING_HEADER_AFUI = "Aztra's Forever UI"
 BINDING_NAME_AFUI_GUILDCOMM = "Guild & Communities"
-function AFUI_ToggleGuildCommunities() if AFUI.GuildCommunities then AFUI.GuildCommunities.Toggle() end end
+function AFUI_ToggleGuildCommunities()
+  if AFUI.GuildCommunities and AFUI.ModuleEnabled("guild") then AFUI.GuildCommunities.Toggle()
+  elseif type(_G.ToggleGuildFrame) == "function" then ToggleGuildFrame() -- Guild windows switched off: the key (still bound to us until the next login) opens the client's own
+  elseif type(_G.ToggleFriendsFrame) == "function" then ToggleFriendsFrame(3) end
+end
+
+-- Guild windows switched off (Settings > Windows): J goes back to what it was before we took it (the client's own guild toggle when an earlier version took it without noting
+-- the old action), and the next time the switch is on the key is taken again.
+local function giveBackGuildKey(db)
+  if not db.guildCommKeyDone or GetBindingAction("J") ~= "AFUI_GUILDCOMM" then return end
+  local was = db.guildCommKeyWas
+  if was == nil then was = "TOGGLEGUILDTAB" end
+  if SetBinding("J", was ~= "" and was or nil) then
+    db.guildCommKeyDone, db.guildCommKeyWas = nil, nil
+    if _G.SaveBindings and _G.GetCurrentBindingSet then SaveBindings(GetCurrentBindingSet()) end
+  end
+end
 
 function AFUI.BindGuildCommKey()
   local db = _G.AztraForeverUIDB
   if type(db) ~= "table" or not _G.SetBinding or not _G.GetBindingAction then return end
+  if not AFUI.ModuleEnabled("guild") then return giveBackGuildKey(db) end
   local plan = AFUI.GuildCommunities and AFUI.GuildCommunities.BindPlan(GetBindingAction("J"), db.guildCommKeyDone, GetBindingAction("SHIFT-J"),
     GetBindingKey and GetBindingKey("AFUI_GUILDCOMM") ~= nil)
   if not plan then return end
   db.guildCommKeyDone = true
+  db.guildCommKeyWas = GetBindingAction("J") or ""
   if SetBinding("J", "AFUI_GUILDCOMM") then
     if plan == "migrate" then SetBinding("SHIFT-J") end -- no action: the old key is free again
     if _G.SaveBindings and _G.GetCurrentBindingSet then SaveBindings(GetCurrentBindingSet()) end

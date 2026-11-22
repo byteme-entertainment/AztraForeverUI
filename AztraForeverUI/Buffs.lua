@@ -41,6 +41,7 @@ local DB = function() return type(AztraForeverUICharDB) == "table" and AztraFore
 box:SetWidth(WRAP.HELPFUL * PITCH + 14); box:SetHeight(3 * ROW + GAP + 2 * ROW)
 local holder = CreateFrame("Frame", "AFUI_Buffs", box)
 holder:SetAllPoints(box)
+holder:Hide() -- shown by OnLogin: with "Buffs & debuffs" switched off (Settings > Windows) the client's own BuffFrame stays and nothing of ours draws
 local pool = { HELPFUL = {}, HARMFUL = {} } -- buttons of each block, reused
 AFUI.BuffPool = pool -- read by AnchorCompat.lua: the stand-ins of BuffButtonN / DebuffButtonN / TempEnchantN follow these
 local rowsOf = { HELPFUL = 0, HARMFUL = 0 }
@@ -212,6 +213,7 @@ AFUI.On("PLAYER_AURAS_CHANGED", function() dirty = true end) -- 2.4.3
 AFUI.On("UNIT_INVENTORY_CHANGED", function() dirty = true end)
 
 AFUI.RegisterModule("Buffs", { OnLogin = function()
+  holder:Show()
   AFUI.Kill(_G.BuffFrame); AFUI.Kill(_G.TemporaryEnchantFrame)
   AFUI.SetBuffsCollapsed(DB().buffsCollapsed)
 end })

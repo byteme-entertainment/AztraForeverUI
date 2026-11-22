@@ -33,8 +33,14 @@ local LEVEL_W, LEVEL_H, LEVEL_DX, LEVEL_DY = 23.5, 24.5, -2, 1.5 -- the level fr
 local NAME_PAD, NAME_SIZE, LEVEL_FONT = 5, 11, 8 -- 14 and 10 times the Small vertical scale 0.8
 local NP = {}
 AFUI.Nameplates = NP
+NP.PLATE_W, NP.CELL_H = W, 30 -- the plate's width and the height of its visible bar row, at k = 1 (the grid's cell, NameplateGrid.lua)
 NP.TARGET_SCALE = 1.08 -- "Subtle" (default): the targeted plate is laid out 8% bigger; 1.17 (the recording: 1.15 wide, 1.2 high) read as giant on Mat's screen
 local TARGET_SCALES = { off = 1, subtle = NP.TARGET_SCALE, large = 1.17 }
+-- Crowd layout: a plate that is not the target is laid out at COMPACT of the full size (narrower bar, smaller name; "Compact plates", default on). The target keeps the
+-- full size times its TargetScale, so it is the one big plate in a crowd. Nothing moves when the target changes: the new size is applied at once, not eased (an eased
+-- SetScale around the plate's centre was the plate that "moves"); NP.ANIMATE = true brings the old ease back (the specs of the ease use it).
+NP.COMPACT, NP.ANIMATE = 0.9, false
+function NP.Rest() return AFUI.GetSetting("nameplateCompact", true) and NP.COMPACT or 1 end
 -- Target zoom: exponential ease (WinKit.ScrollEase style, framerate independent), ~99% done in 0.14 s in / 0.18 s out; the ring / overlay fade is linear, 0.1 s.
 local ZOOM_IN, ZOOM_OUT, ZOOM_EPS, FADE_TIME = math.log(100) / 0.14, math.log(100) / 0.18, 0.0005, 0.1
 function NP.ZoomStep(cur, goal, dt)
@@ -195,57 +201,86 @@ local function build(host, raid)
   return s
 end
 
+-- One screen pixel in the plate frame's own units (nil when the client cannot say: the preview, the specs). Every size and offset of the plate lands on a whole
+-- pixel of the frame's effective scale, so a plate never shimmers between two sub-pixel positions as the client moves it.
+local function pixelSize(f)
+  if type(_G.GetPhysicalScreenSize) ~= "function" then return end
+  local _, h = _G.GetPhysicalScreenSize()
+  local es = AFUI.SafeMeasure and AFUI.SafeMeasure(f, "GetEffectiveScale")
+  if type(h) == "number" and h > 0 and type(es) == "number" and es > 0 then return 768 / h / es end
+end
+local function snapTo(px, v) return px and math.floor(v / px + 0.5) * px or v end
+NP.Snap = snapTo
+
 -- Every size, offset and font of the plate at scale k (the selected plate is 1.17): nothing is scaled by the frame, so every sprite is drawn
--- from its 2x pixels at its final size and the text is laid out at its final size.
+-- from its 2x pixels at its final size and the text is laid out at its final size. Called once per plate added and when the plate's size changes (target, setting), never per frame.
 layout = function(s, k)
   s.k = k
-  s.frame:SetWidth(W * k); s.frame:SetHeight(PLATE_H * k)
-  s.castBox:SetHeight((CAST_H + CAST_TEXT_H) * k)
+  local px = pixelSize(s.frame)
+  s.px = px
+  local function S(v) return snapTo(px, v) end
+  s.frame:SetWidth(S(W * k)); s.frame:SetHeight(S(PLATE_H * k))
+  s.castBox:SetHeight(S((CAST_H + CAST_TEXT_H) * k))
   s.castBox:ClearAllPoints()
-  s.castBox:SetPoint("BOTTOMLEFT", s.frame, "BOTTOMLEFT", INSET * k, 0); s.castBox:SetPoint("BOTTOMRIGHT", s.frame, "BOTTOMRIGHT", -INSET * k, 0)
+  s.castBox:SetPoint("BOTTOMLEFT", s.frame, "BOTTOMLEFT", S(INSET * k), 0); s.castBox:SetPoint("BOTTOMRIGHT", s.frame, "BOTTOMRIGHT", -S(INSET * k), 0)
   local hp = s.hp
-  hp:SetWidth(FRAMED_W * k); hp:SetHeight(FRAMED_H * k)
-  hp:ClearAllPoints(); hp:SetPoint("BOTTOM", s.castBox, "TOP", 0, 5 * k)
-  s.fbg:SetWidth(s.bgW * k); s.fbg:SetHeight(s.bgH * KY * k)
-  s.fbg:ClearAllPoints(); s.fbg:SetPoint("TOPLEFT", hp, "TOPLEFT", -BG_PAD * k, BG_PAD * KY * k)
+  hp:SetWidth(S(FRAMED_W * k)); hp:SetHeight(FRAMED_H * k)
+  hp:ClearAllPoints(); hp:SetPoint("BOTTOM", s.castBox, "TOP", 0, S(5 * k))
+  s.fbg:SetWidth(S(s.bgW * k)); s.fbg:SetHeight(s.bgH * KY * k)
+  s.fbg:ClearAllPoints(); s.fbg:SetPoint("TOPLEFT", hp, "TOPLEFT", -S(BG_PAD * k), BG_PAD * KY * k)
   s.deselected:ClearAllPoints()
   s.deselected:SetPoint("TOPLEFT", hp, "TOPLEFT", 0, KY * k); s.deselected:SetPoint("BOTTOMRIGHT", hp, "BOTTOMRIGHT", 0, -0.8 * KY * k)
   s.barSel:Layout(s.fbg, -2.5 * k, 1.255 * k, -0.5 * k, 4.205 * k, RING_CORNER * k) -- RING_HUG: the ring window = the rim art box
 
   local lv = s.level
-  lv:SetWidth(LEVEL_W * k); lv:SetHeight(LEVEL_H * k)
-  lv:ClearAllPoints(); lv:SetPoint("TOPLEFT", s.fbg, "TOPRIGHT", LEVEL_DX * k, LEVEL_DY * k)
+  lv:SetWidth(S(LEVEL_W * k)); lv:SetHeight(S(LEVEL_H * k))
+  lv:ClearAllPoints(); lv:SetPoint("TOPLEFT", s.fbg, "TOPRIGHT", S(LEVEL_DX * k), LEVEL_DY * k)
   s.flv:ClearAllPoints(); s.flv:SetAllPoints(lv)
   s.levelSel:Layout(lv, -1.321 * k, 0.83 * k, 1.321 * k, -0.716 * k, RING_CORNER * k) -- RING_HUG
-  s.levelText:SetFont(FONT, LEVEL_FONT * k, "OUTLINE"); s.levelText:ClearAllPoints(); s.levelText:SetPoint("CENTER", lv, "CENTER", 0, 0)
+  s.levelText:SetFont(FONT, px and math.floor(LEVEL_FONT * k + 0.5) or LEVEL_FONT * k, "OUTLINE"); s.levelText:ClearAllPoints(); s.levelText:SetPoint("CENTER", lv, "CENTER", 0, 0)
   s.skull:SetWidth(18 * k); s.skull:SetHeight(18 * k); s.skull:ClearAllPoints(); s.skull:SetPoint("CENTER", lv, "CENTER", 0, 0)
 
-  s.name:SetFont(FONT, NAME_SIZE * k, "OUTLINE")
-  s.name:SetWidth(NAME_W * k); s.name:SetHeight(14 * k) -- one fixed line: names are cut to it (setName), never wrapped
-  s.name:ClearAllPoints(); s.name:SetPoint("LEFT", hp, "LEFT", NAME_PAD * k, 0)
-  if s.text then AFUI.FitText(s.name, s.text, NAME_W * k) end
+  s.nameSz = px and math.floor(NAME_SIZE * k + 0.5) or NAME_SIZE * k
+  s.name:SetFont(FONT, s.nameSz, "OUTLINE")
+  s.name:SetWidth(S(NAME_W * k)); s.name:SetHeight(S(14 * k)) -- one fixed line: names are cut to it (setName), never wrapped
+  s.name:ClearAllPoints(); s.name:SetPoint("LEFT", hp, "LEFT", S(NAME_PAD * k), 0)
+  if s.text then NP.FitName(s) end
 
   local raid = s.raid
-  raid:ClearAllPoints(); raid:SetWidth(22 * k); raid:SetHeight(22 * k); raid:SetPoint("RIGHT", s.fbg, "LEFT", 0, 0)
-  s.class:SetWidth(16 * k); s.class:SetHeight(16 * k); s.class:ClearAllPoints(); s.class:SetPoint("RIGHT", raid, "LEFT", 0, 0)
+  raid:ClearAllPoints(); raid:SetWidth(S(22 * k)); raid:SetHeight(S(22 * k)); raid:SetPoint("RIGHT", s.fbg, "LEFT", 0, 0)
+  s.class:SetWidth(S(16 * k)); s.class:SetHeight(S(16 * k)); s.class:ClearAllPoints(); s.class:SetPoint("RIGHT", raid, "LEFT", 0, 0)
 
   local cb = s.castBar
-  cb:SetHeight(CAST_H * k); cb:ClearAllPoints()
-  cb:SetPoint("BOTTOMLEFT", s.castBox, "BOTTOMLEFT", 0, ICON * k); cb:SetPoint("BOTTOMRIGHT", s.castBox, "BOTTOMRIGHT", 0, ICON * k)
+  cb:SetHeight(S(CAST_H * k)); cb:ClearAllPoints()
+  cb:SetPoint("BOTTOMLEFT", s.castBox, "BOTTOMLEFT", 0, S(ICON * k)); cb:SetPoint("BOTTOMRIGHT", s.castBox, "BOTTOMRIGHT", 0, S(ICON * k))
   s.cedge:ClearAllPoints(); s.cedge:SetPoint("TOPLEFT", cb, "TOPLEFT", -k, k); s.cedge:SetPoint("BOTTOMRIGHT", cb, "BOTTOMRIGHT", k, -k)
-  s.castFill:SetHeight(CAST_H * k); s.castFill:ClearAllPoints(); s.castFill:SetPoint("LEFT", cb, "LEFT", 0, 0)
-  s.castIcon:SetWidth(ICON * k); s.castIcon:SetHeight(ICON * k); s.castIcon:ClearAllPoints(); s.castIcon:SetPoint("BOTTOMLEFT", s.castBox, "BOTTOMLEFT", 0, 0)
+  s.castFill:SetHeight(S(CAST_H * k)); s.castFill:ClearAllPoints(); s.castFill:SetPoint("LEFT", cb, "LEFT", 0, 0)
+  s.castIcon:SetWidth(S(ICON * k)); s.castIcon:SetHeight(S(ICON * k)); s.castIcon:ClearAllPoints(); s.castIcon:SetPoint("BOTTOMLEFT", s.castBox, "BOTTOMLEFT", 0, 0)
   s.shield:SetWidth(10 * k); s.shield:SetHeight(12 * k); s.shield:ClearAllPoints(); s.shield:SetPoint("RIGHT", s.castIcon, "RIGHT", 0, 0)
-  s.castText:SetFont(FONT, CAST_TEXT_H * k, "OUTLINE"); s.castText:ClearAllPoints(); s.castText:SetPoint("LEFT", s.castIcon, "RIGHT", 2 * k, 0)
+  s.castText:SetFont(FONT, px and math.floor(CAST_TEXT_H * k + 0.5) or CAST_TEXT_H * k, "OUTLINE"); s.castText:ClearAllPoints(); s.castText:SetPoint("LEFT", s.castIcon, "RIGHT", 2 * k, 0)
   if s.castName then AFUI.FitText(s.castText, s.castName, (BAR_W - ICON - 2) * k) end
   if s.hmax then setHealth(s, s.hcur, s.hmax) end
   if s.cast:IsShown() and s.startMS then castTick(s.cast) end
 end
 
 -- The name, cut with "..." to the trough width (a fixed one-line box does not wrap on either client).
+-- Organized plates are all the same width, so a name that would be cut gets two more tries at a smaller font (90%, 85%; the target one more, 80%) on a slightly wider strip
+-- before it is cut with "..."; the plate itself never changes size. A name that fits is never touched.
+local NAME_STEPS, NAME_STEPS_TARGET, NAME_STEPS_OFF, NAME_EXTRA = { 1, 0.9, 0.85 }, { 1, 0.9, 0.85, 0.8 }, { 1 }, 3
+function NP.FitName(s)
+  local k, NG = s.k, AFUI.NameplateGrid
+  local steps = (NG and NG.Mode() and (s.isTarget and NAME_STEPS_TARGET or NAME_STEPS)) or NAME_STEPS_OFF
+  local size = NAME_SIZE * k
+  for i = 1, #steps do
+    local fs = s.px and math.floor(size * steps[i] + 0.5) or size * steps[i]
+    if s.nameSz ~= fs then s.nameSz = fs; s.name:SetFont(FONT, fs, "OUTLINE") end
+    local shown = AFUI.FitText(s.name, s.text, snapTo(s.px, (NAME_W + (i > 1 and NAME_EXTRA or 0)) * k))
+    if shown == s.text then return end
+  end
+end
 setName = function(s, text)
   s.text = text or ""
-  AFUI.FitText(s.name, s.text, NAME_W * s.k)
+  NP.FitName(s)
 end
 
 setHealth = function(s, cur, max)
@@ -270,9 +305,37 @@ local function setColors(s, r, g, b, nameGrey)
   s.name:SetTextColor(s.nameR, s.nameR, s.nameR)
 end
 
-local function setLevel(s, skull, text, r, g, b)
-  if skull then s.skull:Show(); s.levelText:Hide() else s.skull:Hide(); s.levelText:Show() end
+-- "Show level": always (default) / differing (only elites, rares, bosses and mobs more than 2 levels from you) / never.
+-- Hiding the level box moves nothing: it hangs outside the bar's right edge.
+function NP.LevelShown(mode, level, playerLevel, classification)
+  if mode == "never" then return false end
+  if mode == "always" or level == nil then return true end
+  if level <= 0 or (classification and classification ~= "normal" and classification ~= "trivial" and classification ~= "minus") then return true end
+  return math.abs(level - (playerLevel or level)) > 2
+end
+local function levelMode() return AFUI.GetSetting("nameplateLevels", "always") end
+
+local function setLevel(s, skull, text, r, g, b, classification)
+  local level = skull and -1 or tonumber(text)
+  s.levelOn = NP.LevelShown(levelMode(), level, UnitLevel and UnitLevel("player"), classification)
+  s.levelSrc = { skull, text, r, g, b, classification }
+  for _, t in ipairs({ s.flv, s.levelText, s.skull }) do t:Hide() end
+  if s.levelOn then
+    s.flv:Show()
+    if skull then s.skull:Show() else s.levelText:Show() end
+  end
   s.levelText:SetText(text); s.levelText:SetTextColor(r, g, b)
+end
+
+-- "Show names": always (default) / target only / mouse-over and target. A name is only shown or hidden, never re-laid.
+function NP.NameShown(mode, isTarget, isMouseover)
+  if mode == "target" then return isTarget and true or false end
+  if mode == "hover" then return (isTarget or isMouseover) and true or false end
+  return true
+end
+local function applyName(s)
+  local over = s.unit and UnitIsUnit and UnitIsUnit(s.unit, "mouseover")
+  if NP.NameShown(AFUI.GetSetting("nameplateNames", "always"), s.isTarget, over) then s.name:Show() else s.name:Hide() end
 end
 
 -- Zoom: at rest (z == zGoal) the plate is laid out exactly at k = z with scale 1 (pixel-identical to the static layout); while it moves, the plate stays laid out at
@@ -295,7 +358,7 @@ end
 local function applySel(s)
   local a = s.sel
   for _, t in ipairs({ s.barSel, s.levelSel }) do
-    if a > 0 then t:Show(); t:SetAlpha(a) else t:Hide() end
+    if a > 0 and (t ~= s.levelSel or s.levelOn ~= false) then t:Show(); t:SetAlpha(a) else t:Hide() end
   end
   if a < 1 then s.deselected:Show(); s.deselected:SetAlpha(1 - a) else s.deselected:Hide() end
 end
@@ -303,7 +366,8 @@ end
 -- a recycled / hidden plate starts again from rest: no animation left behind, the next setTarget lands without one
 function NP.ResetZoom(s, z)
   active[s] = nil
-  s.z, s.zGoal, s.fresh = z or 1, z or 1, z == nil
+  local goal = z or NP.Rest()
+  s.z, s.zGoal, s.fresh = goal, goal, z == nil
   if z == nil then s.sel, s.selGoal = 0, 0 end
   applyZoom(s); applySel(s)
 end
@@ -329,14 +393,15 @@ end
 
 -- healthbar.lua:90-116 + camelot level frame :55-71: atlas rings tinted white (target) / orange (focus), faded in and out; the selected plate zooms to TargetScale (animated)
 local function setTarget(s, isTarget, isFocus)
-  s.isTarget = isTarget
+  s.isTarget, s.isFocus = isTarget, isFocus
   local c = isTarget and TARGET or FOCUS
   local on = isTarget or isFocus
   if on then for _, t in ipairs({ s.barSel, s.levelSel }) do t:SetVertexColor(c[1], c[2], c[3]) end end
-  s.selGoal, s.zGoal = on and 1 or 0, isTarget and NP.TargetScale() or 1
-  if s.fresh then s.fresh, s.z, s.sel = nil, s.zGoal, s.selGoal; active[s] = nil end
+  s.selGoal, s.zGoal = on and 1 or 0, isTarget and NP.TargetScale() or NP.Rest()
+  if s.fresh or not NP.ANIMATE then s.z = s.zGoal end -- the size lands at once: no eased scale, nothing slides
+  if s.fresh then s.fresh, s.sel = nil, s.selGoal; active[s] = nil end
   if s.z ~= s.zGoal or s.sel ~= s.selGoal then activate(s) end
-  applyZoom(s); applySel(s)
+  applyZoom(s); applySel(s); applyName(s)
 end
 
 castTick = function(c)
@@ -381,21 +446,61 @@ local function health253(s)
   setHealth(s, UnitHealth(u), UnitHealthMax(u))
 end
 
+-- Stacking order: the target above everything, then the units that hold your threat, then attackable units in combat, then the rest; inside a tier the client's own
+-- order (it draws nearer plates over farther ones, and that shows in the plate frame's level) is kept: level = the plate's own level + tier * TIER_STEP.
+-- Recomputed when a plate is added and when its target / threat state changes, never per frame.
+local TIER_STEP, MAX_LEVEL = 500, 9000
+function NP.Tier(isTarget, threat, inCombat) return isTarget and 3 or (threat and 2) or (inCombat and 1) or 0 end
+function NP.PlateLevel(hostLevel, tier) return math.min(MAX_LEVEL, math.max(type(hostLevel) == "number" and hostLevel or 1, 1) + tier * TIER_STEP) end
+local function setLevels(s, L)
+  s.frame:SetFrameLevel(L)
+  for _, c in ipairs({ s.castBox, s.hp, s.level }) do c:SetFrameLevel(L + 1) end
+  s.cast:SetFrameLevel(L + 2); s.castBar:SetFrameLevel(L + 3)
+  local row = s.auras
+  if row then
+    row:SetFrameLevel(L + 2)
+    for _, b in ipairs(row.icons) do b:SetFrameLevel(L + 3); b.cd:SetFrameLevel(L + 4) end
+  end
+end
+local function prioritize(s)
+  local u = s.unit
+  local threat = u and UnitThreatSituation and (UnitThreatSituation("player", u) or 0) >= 1
+  local fight = u and UnitCanAttack and UnitCanAttack("player", u) and UnitAffectingCombat and UnitAffectingCombat(u)
+  local tier = NP.Tier(s.isTarget, threat, fight)
+  local L = NP.PlateLevel(AFUI.SafeMeasure(s.host, "GetFrameLevel"), tier)
+  if s.tier == tier and s.hostL == L then return end
+  s.tier, s.hostL = tier, L
+  setLevels(s, L)
+end
+
+local function raid253(s)
+  local idx = GetRaidTargetIndex(s.unit)
+  if idx then SetRaidTargetIconTexture(s.raid, idx); s.raid:Show() else s.raid:Hide() end
+end
+
 local function refresh253(s)
   local u = s.unit
   health253(s)
   setName(s, UnitName(u))
   local level = UnitLevel(u)
   local r, g, b = unpack(NON_ATTACKABLE)
-  setLevel(s, level <= 0, level, r, g, b) -- the video: a gold number in the level box, not coloured by difficulty
-  if UnitCanAttack("player", u) then r, g, b = AFUI.LevelColor(level) end
-  local idx = GetRaidTargetIndex(u)
-  if idx then SetRaidTargetIconTexture(s.raid, idx); s.raid:Show() else s.raid:Hide() end
-  local a = UnitCanAttack("player", u) and CLASSIFICATION[UnitClassification(u)]
+  local class = UnitClassification(u)
+  setLevel(s, level <= 0, level, r, g, b, class) -- the video: a gold number in the level box, not coloured by difficulty
+  raid253(s)
+  local a = UnitCanAttack("player", u) and CLASSIFICATION[class]
   if a then AFUI.SetAtlas(s.class, a); s.class:Show() else s.class:Hide() end
-  setTarget(s, UnitIsUnit(u, "target"), UnitIsUnit(u, "focus"))
+  setTarget(s, UnitIsUnit(u, "target") and true or false, UnitIsUnit(u, "focus") and true or false)
+  prioritize(s)
   s.activeAura = true
   if AFUI.NameplateAuras then AFUI.NameplateAuras.Update(s, u) end
+end
+
+-- Target / focus changed: only the plates whose state changed are touched (the old and the new target), the rest of the crowd stays exactly as it is.
+local function retarget253()
+  for _, s in pairs(byUnit) do
+    local t, f = UnitIsUnit(s.unit, "target") and true or false, UnitIsUnit(s.unit, "focus") and true or false
+    if t ~= (s.isTarget or false) or f ~= (s.isFocus or false) then setTarget(s, t, f); prioritize(s) end
+  end
 end
 
 -- A protected plate frame cannot be hidden in combat (the client blocks it and names this addon): make it see-through instead.
@@ -412,11 +517,18 @@ local function added(_, unit)
     s = build(plate)
     plate.afuiSkin = s
     local uf = plate.UnitFrame
-    if uf then hideUnitFrame(uf); uf:HookScript("OnShow", hideUnitFrame) end
+    if uf then
+      -- Blizzard's plate frames are restricted from addon measuring (GetPoint / GetRect ... raise a client error): they are only ever hidden / anchored, never read
+      for _, f in ipairs({ uf, uf.healthBar or false, uf.castBar or false }) do if f then AFUI.NoMeasure(f) end end
+      hideUnitFrame(uf); uf:HookScript("OnShow", hideUnitFrame)
+    end
   end
   if s.unit then byUnit[s.unit] = nil end
   s.unit, byUnit[unit] = unit, s
+  s.tier = nil
+  if AFUI.NameplateGrid then AFUI.NameplateGrid.Add(s) end -- Organized: our ghost frame and the grid engine (does nothing in the other modes)
   NP.ResetZoom(s)
+  if s.k == s.z then layout(s, s.k) end -- the one layout of this plate: pixel size and effective scale are known now
   refresh253(s)
   syncCast(s, unit)
 end
@@ -428,6 +540,7 @@ local function setup253()
     local s = byUnit[unit]
     if not s then return end
     byUnit[unit], s.unit = nil, nil
+    if AFUI.NameplateGrid then AFUI.NameplateGrid.Remove(s) end
     s.cast:SetScript("OnUpdate", nil); showCast(s, false)
     s.activeAura = false
     NP.ResetZoom(s)
@@ -438,8 +551,11 @@ local function setup253()
   for _, e in ipairs({ "UNIT_HEALTH", "UNIT_MAXHEALTH" }) do AFUI.On(e, onUnit(health253)) end
   for _, e in ipairs({ "UNIT_NAME_UPDATE", "UNIT_LEVEL", "UNIT_FACTION", "UNIT_THREAT_LIST_UPDATE",
     "UNIT_CLASSIFICATION_CHANGED", "UNIT_CONNECTION" }) do AFUI.On(e, onUnit(refresh253)) end
-  local function all() for _, s in pairs(byUnit) do refresh253(s) end end
-  for _, e in ipairs({ "PLAYER_TARGET_CHANGED", "PLAYER_FOCUS_CHANGED", "RAID_TARGET_UPDATE" }) do AFUI.On(e, all) end
+  for _, e in ipairs({ "PLAYER_TARGET_CHANGED", "PLAYER_FOCUS_CHANGED" }) do AFUI.On(e, retarget253) end
+  AFUI.On("RAID_TARGET_UPDATE", function() for _, s in pairs(byUnit) do raid253(s) end end)
+  AFUI.On("UPDATE_MOUSEOVER_UNIT", function() -- "Show names: mouse-over and target"
+    if AFUI.GetSetting("nameplateNames", "always") == "hover" then for _, s in pairs(byUnit) do applyName(s) end end
+  end)
   for _, plate in ipairs(C_NamePlate.GetNamePlates()) do
     if plate.namePlateUnitToken then added(nil, plate.namePlateUnitToken) end
   end
@@ -500,7 +616,7 @@ local function skin243(plate)
   blank(health); if castbar then blank(castbar) end
   health:HookScript("OnValueChanged", function() refresh243(s) end)
   plate:HookScript("OnShow", function() refresh243(s); plateText(s); dirty = 2 end)
-  refresh243(s); plateText(s); setTarget(s, false)
+  refresh243(s); plateText(s); setTarget(s, false); prioritize(s)
   skins243[#skins243 + 1] = s
   dirty = 2
 end
@@ -514,7 +630,7 @@ local function retarget()
   for _, s in ipairs(skins243) do
     local t = hasTarget and s.host:IsShown() and s.host:GetAlpha() > 0.99 or false
     if t then new = s end
-    if t ~= s.isTarget then setTarget(s, t) end
+    if t ~= s.isTarget then setTarget(s, t); prioritize(s) end
   end
   if targetSkin and targetSkin ~= new then targetSkin.cast:SetScript("OnUpdate", nil); showCast(targetSkin, false) end
   targetSkin = new
@@ -549,13 +665,126 @@ local function setup243()
   AFUI.On("UNIT_AURA", function(_, unit) if unit == "target" and targetSkin and AFUI.NameplateAuras then AFUI.NameplateAuras.OnAura(targetSkin, "target") end end)
 end
 
+---------------------------------------------------------------------------------------------- client CVars
+-- The client moves plates itself (nameplateMotion stacking, scale by distance, its own selected-plate scale): left alone those fight our layout. These are set only
+-- out of combat, only while the player has not set them (the value is still the client's default, or still the one we wrote), and put back when the
+-- option is turned off. AztraForeverUIDB.npCVars[name] = { orig = the value before us, applied = what we wrote }.
+local function cvarGet(n) if type(_G.GetCVar) ~= "function" then return end; local ok, v = pcall(_G.GetCVar, n); if ok then return v end end
+local function cvarDefault(n) if type(_G.GetCVarDefault) ~= "function" then return end; local ok, v = pcall(_G.GetCVarDefault, n); if ok then return v end end
+local function same(a, b)
+  if a == b then return true end
+  local x, y = tonumber(a), tonumber(b)
+  return x ~= nil and y ~= nil and math.abs(x - y) < 1e-4
+end
+local function num(v) return string.format("%.4g", v) end
+
+-- name -> wanted value, from the settings
+function NP.WantedCVars()
+  local want = {}
+  if not AFUI.GetSetting("nameplateManageCVars", true) then return want end
+  want.nameplateMinScale, want.nameplateMaxScale, want.nameplateSelectedScale, want.nameplateLargerScale = "1", "1", "1", "1" -- the plate keeps one size; the target gets ours
+  -- Organized: the plates sit on their units (no client motion) and our grid arranges them (NameplateGrid.lua); if the grid cannot measure its frames in the live client it
+  -- gives up (NG.broken) and the client's own stacking takes over again. The client's overlap CVars are left alone in Organized.
+  local mode = AFUI.GetSetting("nameplateStacking", "organized")
+  local NG = AFUI.NameplateGrid
+  if mode == "organized" and not (NG and NG.Active()) then mode = "stacking" end -- no grid (2.4.3, or it could not measure): the client's own stacking
+  if mode == "stacking" then
+    want.nameplateMotion = "1"
+    want.nameplateMotionSpeed = num(AFUI.GetSetting("nameplateMotionSpeed", 0.025))
+    want.nameplateOverlapH, want.nameplateOverlapV = "0.8", "1.1" -- a visible gap below a plate, a plate's width side by side
+  else
+    want.nameplateMotion = "0"
+  end
+  want.nameplateMaxDistance = num(AFUI.GetSetting("nameplateMaxDistance", 40))
+  return want
+end
+
+local function release(db, name, rec)
+  if same(cvarGet(name), rec.applied) and rec.orig ~= nil then pcall(_G.SetCVar, name, rec.orig) end
+  db.npCVars[name] = nil
+end
+
+function NP.ApplyCVars()
+  if type(_G.SetCVar) ~= "function" then return end
+  if InCombatLockdown() then AFUI.RunOutOfCombat(NP.ApplyCVars); return end
+  local db = _G.AztraForeverUIDB
+  if type(db) ~= "table" then return end
+  db.npCVars = type(db.npCVars) == "table" and db.npCVars or {}
+  local want = NP.WantedCVars()
+  for name, rec in pairs(db.npCVars) do if want[name] == nil then release(db, name, rec) end end
+  for name, value in pairs(want) do
+    local cur, rec = cvarGet(name), db.npCVars[name]
+    if cur ~= nil then
+      if rec then
+        if not same(cur, rec.applied) then db.npCVars[name] = nil -- changed by the player since: theirs now
+        elseif not same(cur, value) then pcall(_G.SetCVar, name, value); rec.applied = value end
+      elseif not same(cur, value) then
+        local def = cvarDefault(name)
+        if def ~= nil and same(cur, def) then -- still the client's default: not set by the player
+          if pcall(_G.SetCVar, name, value) then db.npCVars[name] = { orig = cur, applied = value } end
+        end
+      end
+    end
+  end
+end
+
+---------------------------------------------------------------------------------------------- settings
+local function skins() local l = {}; for _, t in ipairs({ byUnit, skins243 }) do for _, s in pairs(t) do l[#l + 1] = s end end; return l end
+NP.Skins = skins
+local function restyleAll() -- size, name and level rules of every plate in view
+  for _, s in ipairs(skins()) do
+    NP.ResetZoom(s, s.isTarget and NP.TargetScale() or NP.Rest())
+    if s.levelSrc then local a = s.levelSrc; setLevel(s, a[1], a[2], a[3], a[4], a[5], a[6]); applySel(s) end
+    applyName(s)
+  end
+end
+
+local function registerSettings()
+  for key, default in pairs({ nameplateCompact = true, nameplateNames = "always", nameplateLevels = "always", nameplateAuraSide = "above",
+    nameplateStacking = "organized", nameplateGridGap = 4, nameplateGridShift = 160, nameplateMotionSpeed = 0.025, nameplateMaxDistance = 40, nameplateManageCVars = true }) do AFUI.GetSetting(key, default) end
+  local R = AFUI.Settings and AFUI.Settings.Register
+  if not R then return end
+  local on = function() return AFUI.Nameplates ~= nil end
+  R { category = "nameplates", key = "nameplateCompact", label = "Compact plates", default = true, requires = on,
+    tooltip = "Plates that are not your target are drawn narrower and smaller, so a crowd takes less room. Your target keeps the full size." }
+  R { category = "nameplates", key = "nameplateNames", type = "dropdown", label = "Show names", default = "always", requires = on,
+    values = { { "always", "Always" }, { "target", "Target only" }, { "hover", "Mouse-over and target" } },
+    tooltip = "Whose name is written on its plate. A long name is cut to the bar with ..." }
+  R { category = "nameplates", key = "nameplateLevels", type = "dropdown", label = "Show level", default = "always", requires = on,
+    values = { { "always", "Always" }, { "differing", "If different" }, { "never", "Never" } },
+    tooltip = "Always shows every level. \"If different\" shows it only for elites, rares, bosses and mobs more than 2 levels above or below you." }
+  R { category = "nameplates", key = "nameplateAuraSide", type = "dropdown", label = "Your debuffs sit", default = "above", requires = on,
+    values = { { "above", "Above the plate" }, { "below", "Below the cast bar" } },
+    tooltip = "Where the row of your debuffs goes. It never moves the plate itself." }
+  R { category = "nameplates", key = "nameplateStacking", type = "dropdown", label = "Plate stacking", default = "organized", requires = on,
+    values = { { "organized", "Organized" }, { "stacking", "Stacking" }, { "overlap", "Overlapping" } },
+    tooltip = "Organized: a crowd of plates is set out in neat rows and columns, at any camera angle; a lone plate stays on its unit. Stacking: the client pushes crowded plates apart so they do not cover each other. Overlapping: plates stay on their units and may cover each other." }
+  local organized = function() return AFUI.Nameplates ~= nil and AFUI.GetSetting("nameplateStacking", "organized") == "organized" end
+  R { category = "nameplates", key = "nameplateGridGap", type = "slider", label = "Organized: cell gap", default = 4, min = 0, max = 20, step = 1, format = "%d", requires = organized,
+    tooltip = "Pixels of space between plates in the organized grid." }
+  R { category = "nameplates", key = "nameplateGridShift", type = "slider", label = "Organized: max plate shift", default = 160, min = 40, max = 400, step = 10, format = "%d", requires = organized,
+    tooltip = "How far (in pixels) an organized plate may be moved away from its unit. Past this it overlaps its neighbours instead of drifting off." }
+  R { category = "nameplates", key = "nameplateMotionSpeed", type = "slider", label = "Stacking motion speed", default = 0.025, min = 0.005, max = 0.2, step = 0.005, format = "%.3f",
+    requires = function() return AFUI.Nameplates ~= nil and AFUI.GetSetting("nameplateStacking", "organized") == "stacking" end,
+    tooltip = "How fast stacked plates slide apart. Low is calm; the client's own value is 0.025." }
+  R { category = "nameplates", key = "nameplateMaxDistance", type = "slider", label = "Plate view distance", default = 40, min = 20, max = 60, step = 5, format = "%d", requires = on,
+    tooltip = "How far away a unit still gets a plate. A shorter distance means fewer plates in a crowd." }
+  R { category = "nameplates", key = "nameplateManageCVars", label = "Set the client's plate options", default = true, requires = on,
+    tooltip = "Lets this addon set the client's own plate options (stacking, scale, distance) out of combat, only the ones you have not changed yourself. Off puts them back as they were." }
+end
+
 function AFUI.SetupNameplates()
   if IS_243 then setup243() else setup253() end
-  AFUI.OnSettingChanged("nameplateTargetScale", function() -- the plate under the target takes the new size at once
-    for _, list in ipairs({ byUnit, skins243 }) do
-      for _, s in pairs(list) do if s.isTarget then NP.ResetZoom(s, NP.TargetScale()) end end
-    end
+  registerSettings()
+  for _, k in ipairs({ "nameplateTargetScale", "nameplateCompact", "nameplateNames", "nameplateLevels" }) do AFUI.OnSettingChanged(k, restyleAll) end
+  AFUI.OnSettingChanged("nameplateAuraSide", function() if AFUI.NameplateAuras and AFUI.NameplateAuras.PlaceAll then AFUI.NameplateAuras.PlaceAll() end end)
+  for _, k in ipairs({ "nameplateStacking", "nameplateMotionSpeed", "nameplateMaxDistance", "nameplateManageCVars" }) do AFUI.OnSettingChanged(k, NP.ApplyCVars) end
+  AFUI.OnSettingChanged("nameplateStacking", function() -- a mode switch puts every plate back at once (or builds the ghosts), then the names are fitted again
+    if AFUI.NameplateGrid then AFUI.NameplateGrid.Refresh() end
+    for _, s in ipairs(skins()) do if s.text then NP.FitName(s) end end
   end)
+  for _, k in ipairs({ "nameplateGridGap", "nameplateGridShift" }) do AFUI.OnSettingChanged(k, function() if AFUI.NameplateGrid then AFUI.NameplateGrid.Reset() end end) end
+  NP.ApplyCVars()
   for _, e in ipairs(CAST_EVENTS) do
     AFUI.On(e, function(_, unit) local s = skinFor(unit); if s then syncCast(s, unit) end end)
   end

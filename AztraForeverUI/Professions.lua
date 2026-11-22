@@ -1346,6 +1346,7 @@ if type(_G.UpdateUIPanelPositions) == "function" then
   end)
 end
 local function tryRestyle()
+  if not AFUI.ModuleEnabled("professions") then return end -- the client's own trade skill / craft windows (Settings > Windows)
   for key, d in pairs(DESC) do
     if not P.windows[key] and _G[d.frame] and type(_G[d.update]) == "function" then
       xpcall(function() restyle(key) end, geterrorhandler())
@@ -1367,7 +1368,10 @@ end
 
 SLASH_AFUIPROFESSIONS1 = "/professions"
 SLASH_AFUIPROFESSIONS2 = "/prof"
-SlashCmdList["AFUIPROFESSIONS"] = function() P.Toggle() end
+SlashCmdList["AFUIPROFESSIONS"] = function()
+  if not AFUI.ModuleEnabled("professions") then AFUI.Print("Aztra's Forever UI: the Professions window is switched off (Settings > Windows)."); return end
+  P.Toggle()
+end
 
 function P.Setup()
   if overview then return end

@@ -10,15 +10,15 @@
 --     AFUI.Settings.Register{ category = "chat", key = "chatFoo", type = "check" | "dropdown" | "slider" | "button" | "text", label = "...", tooltip = "...", default = true,
 --       values = { "a", { "b", "Shown label" } } (dropdown), min = 0, max = 1, step = 0.1, format = "%.1f" (slider), onClick = fn (button), text = "..." | fn, lines = n (text),
 --       get = fn / set = fn (a value that lives elsewhere), requires = fn -> bool (visible when it says so, instead of the provided rule) }
---   and react to a change with AFUI.OnSettingChanged("chatFoo", function(value) ... end). Categories: general, profiles, actionbars, chat, tooltips, nameplates, tracker, compat, about.
+--   and react to a change with AFUI.OnSettingChanged("chatFoo", function(value) ... end). Categories: general, profiles, actionbars, chat, tooltips, nameplates, tracker, windows, compat, about.
 AFUI = AFUI or {}
 local S = {}
 AFUI.Settings = S
 
-S.W, S.H = 640, 540
+S.W, S.H = 640, 650 -- 650 fits ten side tabs at Forever's full pitch
 S.LIST_W, S.COL_W, S.GAP, S.ROW_H, S.ROW_GAP = 580, 285, 10, 34, 2
 S.LIST_X, S.LIST_Y, S.LIST_BOTTOM = 20, -92, 56 -- the list's TOPLEFT in the window, and the strip under it (the Defaults / Okay buttons)
-S.TAB_H, S.TAB_TOP, S.TAB_PITCH = 55, 60, 57 -- side tab height, first tab's distance from the window top, and the widest spacing (Forever's 57)
+S.TAB_H, S.TAB_TOP, S.TAB_PITCH, S.ARROW_H = 55, 60, 57, 18 -- side tab height, first tab's distance from the window top, Forever's pitch (never squeezed), scroll arrow height
 S.TITLE = "Aztra's Forever UI"
 S.CATEGORIES = {
   { key = "general", label = "General", icon = "Trade_Engineering", desc = "Windows, layouts and the setup helper." },
@@ -28,16 +28,50 @@ S.CATEGORIES = {
   { key = "tooltips", label = "Tooltips & Bags", icon = "INV_Misc_Gem_01", desc = "Tooltips, vendor helpers and the details on bag and gear slots." },
   { key = "nameplates", label = "Nameplates", icon = "Ability_Marksmanship", desc = "The plates over units in the world." },
   { key = "tracker", label = "Tracker & Map", icon = "INV_Misc_Map_01", desc = "Quests on the tracker and on the map." },
+  { key = "windows", label = "Windows", icon = "Spell_Holy_MagicalSentry", desc = "Aztra's Forever UI's version of each window, or Blizzard's own." },
   { key = "compat", label = "Compatibility", icon = "INV_Misc_Spyglass_03", desc = "Other addons that draw the same things, and what Aztra's Forever UI does about them." },
   { key = "about", label = "About", icon = "INV_Misc_Book_09", desc = "What this addon is and how to reach it." },
 }
 S.current = "general"
 
--- y (negative, from the window top) of side tab i of n: the usual 57 px pitch, squeezed when the column would run past the window bottom (8 px margin)
+-- How many side tabs fit at the full pitch (8 px bottom margin); when not all n do, a down arrow takes the bottom strip and the column scrolls.
+function S.TabCapacity(n)
+  n = n or #S.CATEGORIES
+  local function fit(reserve) return math.floor((S.H - S.TAB_TOP - 8 - reserve - S.TAB_H) / S.TAB_PITCH) + 1 end
+  if n <= fit(0) then return n end
+  return fit(S.ARROW_H)
+end
+S.tabFirst = 1 -- first visible category when the column scrolls
+-- y (negative, from the window top) of side tab i of n, or nil when it is scrolled out of view
 function S.TabY(i, n)
   n = n or #S.CATEGORIES
-  local pitch = n > 1 and math.min(S.TAB_PITCH, math.floor((S.H - S.TAB_TOP - S.TAB_H - 8) / (n - 1))) or S.TAB_PITCH
-  return -S.TAB_TOP - (i - 1) * pitch
+  local cap = S.TabCapacity(n)
+  local first = math.max(1, math.min(S.tabFirst, n - cap + 1))
+  if i < first or i >= first + cap then return nil end
+  return -S.TAB_TOP - (i - first) * S.TAB_PITCH
+end
+function S.LayoutTabs()
+  local w = S.Frame()
+  if not (S.tabs and w) then return end
+  local n = #S.CATEGORIES
+  local cap = S.TabCapacity(n)
+  S.tabFirst = math.max(1, math.min(S.tabFirst, n - cap + 1))
+  for i, b in ipairs(S.tabs) do
+    local y = S.TabY(i, n)
+    if y then b:ClearAllPoints(); b:SetPoint("TOPLEFT", w, "TOPRIGHT", 0, y); b:Show() else b:Hide() end
+  end
+  if S.tabUp then
+    if S.tabFirst > 1 then S.tabUp:Show() else S.tabUp:Hide() end
+    if S.tabFirst + cap - 1 < n then S.tabDown:Show() else S.tabDown:Hide() end
+  end
+end
+-- scroll the column by d tabs, or just far enough that tab `ensure` is in view
+function S.TabScroll(d, ensure)
+  local cap = S.TabCapacity(#S.CATEGORIES)
+  local first = S.tabFirst + (d or 0)
+  if ensure then if ensure < first then first = ensure elseif ensure >= first + cap then first = ensure - cap + 1 end end
+  S.tabFirst = math.max(1, math.min(first, #S.CATEGORIES - cap + 1))
+  S.LayoutTabs()
 end
 
 local function K() return AFUI.WinKit end
@@ -292,7 +326,7 @@ def { category = "nameplates", key = "nameplateTargetScale", type = "dropdown", 
 -- Tracker and map
 def { category = "tracker", key = "autoTrackQuests", label = "Track new quests automatically", default = true,
   tooltip = "A quest you accept is added to the quest tracker at once (once per quest: untick it and it stays off). Questie's own tracker has its own setting.",
-  requires = function() return AFUI.Tracker ~= nil end }
+  requires = function() return AFUI.Tracker ~= nil and AFUI.ModuleEnabled("tracker") end }
 def { category = "tracker", key = "mapQuestPins", label = "Tracked quests on the map", default = true,
   tooltip = "Draws a numbered pin on the world map for each quest you track.",
   requires = function() return AFUI.MapQuestPins ~= nil end }
@@ -307,9 +341,9 @@ if AC then
   def { category = "compat", type = "text", id = "compatDetected", lines = 2, text = function() return AC.DetectedText() end }
   def { category = "compat", type = "text", id = "compatUse", lines = 1, text = "|cffffd100Use Aztra's Forever UI for:|r" }
   for _, grp in ipairs(AC.GROUPS) do
-    def { category = "compat", key = grp.key, label = grp.label, default = true, requires = function() return true end,
+    if not grp.window then def { category = "compat", key = grp.key, label = grp.label, default = true, requires = function() return true end,
       tooltip = grp.tip .. " Off: Aztra's Forever UI does not draw this and leaves it to the other addon (or the game). On by default, off by default while an addon that draws the same thing is loaded and you have not chosen. A change shows after a reload.",
-      get = function() return AC.Choice(grp.id) end, set = function(v) AC.SetChoice(grp.id, v) end, resetTo = function() return AC.Default(grp.id) end }
+      get = function() return AC.Choice(grp.id) end, set = function(v) AC.SetChoice(grp.id, v) end, resetTo = function() return AC.Default(grp.id) end } end
   end
   def { category = "compat", type = "text", id = "compatPending", lines = 1, text = function() return AC.PendingText() end }
   def { category = "compat", type = "button", id = "compatReload", label = "Reload the UI to apply",
@@ -321,6 +355,41 @@ if AC then
   def { category = "compat", type = "button", id = "compatReport", label = "Print the compatibility report",
     tooltip = "Prints every known addon that is loaded, what was done about it and the state of the switches, in the chat window. Paste it in a bug report. The same as /afui compat.",
     onClick = function() AC.Report() end }
+end
+
+-- Windows (AddonCompat.lua): one switch per window or HUD piece Aztra's Forever UI draws. On: ours. Off: the client's own, completely (no hook, skin, key or button of ours).
+-- Read when the game starts, like the Compatibility switches: a change shows after a reload. The takeover switches of the Compatibility page (bags, action bars ...) are listed
+-- here too, on the same keys, so a player finds every "use Blizzard's" choice in one place.
+if AC then
+  local function setBulk(on)
+    for _, id in ipairs(AC.BulkIds()) do AC.SetChoice(id, on) end
+    S.Refresh()
+  end
+  def { category = "windows", type = "text", id = "winWhat", lines = 3,
+    text = "Tick a window to have Aztra's Forever UI draw it. Untick one to keep Blizzard's own version of just that window: nothing of ours touches it then (no skin, key, button or tooltip). Changes apply after a reload." }
+  def { category = "windows", type = "button", id = "winAllBlizzard", label = "Use all Blizzard windows",
+    tooltip = "Unticks every window below except the HUD section (minimap, buffs, action bars, unit frames, nameplates, chat, tooltips), which keep their own choice. Applies after a reload.",
+    onClick = function() setBulk(false) end }
+  def { category = "windows", type = "button", id = "winAllForever", label = "Use all Forever windows",
+    tooltip = "Ticks every window below except the HUD section, which keeps its own choice. This includes the mailbox and the auction house, which are still beta. Applies after a reload.",
+    onClick = function() setBulk(true) end }
+  def { category = "windows", type = "text", id = "winPending", lines = 1, text = function() return AC.PendingText(true) end }
+  def { category = "windows", type = "button", id = "winReload", label = "Reload the UI to apply",
+    tooltip = "Reloads the interface now (the same as /reload): the switches below are read when the game starts.",
+    onClick = function() if _G.ReloadUI then ReloadUI() end end }
+  for i, sec in ipairs(AC.WINDOW_SECTIONS) do
+    def { category = "windows", type = "text", id = "winHead" .. i, lines = 1, text = "|cffffd100" .. sec[1] .. "|r" }
+    for _, id in ipairs(sec[2]) do
+      local grp = AC.Group(id)
+      if grp then
+        local blizz = grp.window and "Blizzard's own version of this window stays" or "this is left to the game (or another addon)"
+        def { category = "windows", key = grp.window and grp.key or ("win_" .. grp.key), label = grp.label, default = grp.default ~= false,
+          requires = function() return true end,
+          tooltip = grp.tip .. " Off: " .. blizz .. ", untouched. A change shows after a reload.",
+          get = function() return AC.Choice(grp.id) end, set = function(v) AC.SetChoice(grp.id, v) end, resetTo = function() return AC.Default(grp.id) end }
+      end
+    end
+  end
 end
 
 -- About
@@ -336,7 +405,7 @@ def { category = "about", type = "text", id = "aboutCmds", lines = 2,
 def { category = "about", type = "text", id = "aboutThanks", lines = 2,
   text = "|cffffd100Thank you for using and supporting Aztra's Forever UI.|r Made with love by Aztra." }
 def { category = "about", type = "text", id = "aboutCrusader", lines = 2,
-  text = "|cffffd100Version 0.94 Beta.|r This addon was specifically designed for |cff66ccffCrusader-Storm|r. Please report anything odd you find while testing." }
+  text = "|cffffd100Version 0.95 Beta.|r This addon was specifically designed for |cff66ccffCrusader-Storm|r. Please report anything odd you find while testing." }
 -- WoW cannot open a browser: a link button shows the url in a small box, Ctrl+C copies it.
 S.LINKS = {} -- add { id, label, url } entries here; each one becomes a button on the About page
 S.LINK_HINT = "Press Ctrl+C to copy, then paste in your browser"
@@ -476,6 +545,7 @@ function S.Rebuild()
   sf:SetVerticalScroll(0)
   if S.bar then S.bar:Refresh() end
   for i, b in ipairs(S.tabs or {}) do b.afActive = S.CATEGORIES[i].key == S.current end
+  S.TabScroll(0, categoryIndex(S.current))
   if K() then K().refreshTabs() end
 end
 
@@ -554,6 +624,19 @@ local function build()
     b:SetScript("OnClick", function() S.Select(c.key) end)
     S.tabs[i] = b
   end
+  -- scroll arrows + mouse wheel for when the categories outgrow the column (never shown with up to ten pages)
+  local function tabArrow(which, anchor, y, d)
+    local a = CreateFrame("Button", "AFUI_SettingsTab" .. which, f)
+    a:SetWidth(S.TAB_H - 8); a:SetHeight(S.ARROW_H); a:SetFrameLevel(f:GetFrameLevel() + 20)
+    a:SetPoint(anchor, f, anchor == "TOPLEFT" and "TOPRIGHT" or "BOTTOMRIGHT", 2, y)
+    local n = "minimal-scrollbar-arrow-" .. (d < 0 and "top" or "bottom")
+    AFUI.SetButtonAtlas(a, { n .. "-c60", n .. "-over-c60", n .. "-over-c60" }, 0.5)
+    a:SetScript("OnClick", function() S.TabScroll(d) end)
+    return a
+  end
+  S.tabUp, S.tabDown = tabArrow("Up", "TOPLEFT", -(S.TAB_TOP - S.ARROW_H - 4), -1), tabArrow("Down", "BOTTOMLEFT", 8, 1)
+  for _, b in ipairs({ unpack(S.tabs) }) do b:EnableMouseWheel(true); b:SetScript("OnMouseWheel", function(_, d) S.TabScroll(d > 0 and -1 or 1) end) end
+  S.LayoutTabs()
 
   return f
 end
@@ -576,7 +659,7 @@ function S.Frame() return win end
 AFUI.Slash.Register("config", function(rest)
   local page = tostring(rest or ""):lower():gsub("%s", "")
   S.Open(categoryIndex(page) and page or nil)
-end, "open this window (add a page: general, profiles, actionbars, chat, tooltips, nameplates, tracker, compat, about)", "/afui [config]")
+end, "open this window (add a page: general, profiles, actionbars, chat, tooltips, nameplates, tracker, windows, compat, about)", "/afui [config]")
 local function printLinks()
   say("links (the buttons on the About page open a box to copy them)")
   for _, l in ipairs(S.LINKS) do AFUI.Print("  |cff66ccff" .. l.label .. "|r  " .. l.url) end

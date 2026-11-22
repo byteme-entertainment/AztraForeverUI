@@ -191,7 +191,7 @@ function AFUI.SetupMinimap()
     return al and ar and at and ab and bl and br and bt and bb and al < br and ar > bl and ab < bt and at > bb
   end
   function AFUI.KeepTrackerClear()
-    if AFUI.Tracker then return end -- Forever's tracker (Tracker.lua) is an Edit Mode system with its own place; Blizzard's list is invisible
+    if AFUI.Tracker and AFUI.ModuleEnabled("tracker") then return end -- Forever's tracker (Tracker.lua) is an Edit Mode system with its own place; Blizzard's list is invisible (switched off: the client's list is the visible one, kept clear of the minimap here)
     local t = _G.WatchFrame or _G.QuestWatchFrame
     if not (t and t.GetLeft and t:IsShown()) then return end
     local bars = AFUI.Bars

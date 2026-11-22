@@ -749,7 +749,8 @@ local function AdoptMicroAndBags()
   end
   AFUI.Kill(MainMenuBarPerformanceBarFrame) -- Blizzard's own latency bar; ours (below) is Forever's
   for _, d in ipairs(MICRO) do
-    local b = EXTRA[d[1]] and MakeExtraMicro(d[1]) or _G[d[1]]
+    local gone = d[1] == "AFUI_ProfessionsMicroButton" and not AFUI.ModuleEnabled("professions") -- no overview window: the client has no Professions window to open
+    local b = not gone and (EXTRA[d[1]] and MakeExtraMicro(d[1]) or _G[d[1]]) or nil
     if b and not b.afui then b:SetParent(mm); SkinMicro(b, d[2]) end
   end
   HookExtraWindows(); SyncExtras()
@@ -952,6 +953,7 @@ buffBox:SetWidth(300); buffBox:SetHeight(75); buffBox:SetPoint("TOPRIGHT", UIPar
 AFUI.BuffAnchor = buffBox
 function AFUI.PlaceBuffs()
   if not BuffFrame then return end
+  if not (AFUI.ModuleEnabled("buffs") or AFUI.ModuleEnabled("minimap")) then return end -- the client's own buffs under its own minimap: nothing of ours moves them (ours minimap but its buffs: they hang from this box, the cluster having moved)
   BuffFrame:SetParent(buffBox)
   BuffFrame:ClearAllPoints(); BuffFrame:SetPoint("TOPRIGHT", buffBox, "TOPRIGHT", 0, 0)
 end

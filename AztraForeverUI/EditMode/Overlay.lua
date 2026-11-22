@@ -387,6 +387,7 @@ SlashCmdList["AFUIEDITMODE"] = EM.Toggle
 local function addMenuButton()
   local keys = GameMenuButtonKeybindings
   if not (GameMenuFrame and keys) or EM.menuButton then return end
+  if not AFUI.ModuleEnabled("gamemenu") then return end -- the client's own Esc menu stays as it is: Edit Mode opens with /editmode or from /afui
   local b = CreateFrame("Button", "AFUI_GameMenuButtonEditMode", GameMenuFrame, "GameMenuButtonTemplate")
   EM.menuButton = b
   b:SetText("Edit Mode")

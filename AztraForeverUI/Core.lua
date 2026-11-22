@@ -56,6 +56,8 @@ function AFUI.RegisterModule(name, module)
 end
 -- Takeover modules: AddonCompat.lua maps each module name to a group (AFUI.ModuleGroup) and answers AFUI.ModuleEnabled(group): the player's switch, or a default that
 -- gives way to an addon that draws the same thing. A module of a group that is off does not start: its OnLogin is skipped and its OnYield (when it has one) runs.
+-- The same switchboard carries the window switches (Settings > Windows: Character, Spellbook, Talents ... Buffs): off = the client's own window, completely. A module whose
+-- window can also be set up from an event (a load-on-demand frame, a key binding, an Edit Mode system) asks AFUI.ModuleEnabled(group) itself; never while the files load.
 AFUI.ModuleGroup = {}
 function AFUI.ModuleEnabled() return true end -- replaced by AddonCompat.lua
 AFUI.On("PLAYER_LOGIN", function()

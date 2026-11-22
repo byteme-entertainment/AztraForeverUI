@@ -187,7 +187,7 @@ function L.Play() L.t = 0; if f then f:SetAlpha(0) end; L.Kick() end
 
 -- /afui loot: a fake window (uncommon stack, rare, epic, money: the client has only 4 row buttons) so the animations can be watched without a kill. Rows ignore clicks.
 function L.Fake()
-  if not f then return end
+  if not f or not AFUI.ModuleEnabled("loot") then return end
   f:Hide() -- before L.fake is set: OnHide clears it
   L.fake = {
     { "Interface\\Icons\\INV_Misc_Herb_07", "Peacebloom", 3, 2 },

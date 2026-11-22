@@ -53,6 +53,13 @@ local syncing = false
 
 local function G(n) return function() return _G[n] end end
 
+-- Entries of a HUD piece the player switched back to the client's own (Settings > Windows) are left alone: the client's frame is the visible one.
+local TAG_GROUP = { tracker = "tracker", buffs = "buffs", minimap = "minimap" }
+function AC.GroupOn(e)
+  local gid = TAG_GROUP[e.tag]
+  return not gid or AFUI.ModuleEnabled(gid)
+end
+
 local function add(mode, group, tag, name, ours)
   local e = { mode = mode, group = group, tag = tag, name = name, ours = ours }
   AC.entries[#AC.entries + 1] = e
@@ -185,6 +192,8 @@ for i = 1, 30 do add("child", "QuestWatchLine1-30", "tracker", "QuestWatchLine" 
 for _, n in ipairs({ "DurabilityFrame", "MirrorTimer1", "RaidWarningFrame", "UIErrorsFrame", "RaidBossEmoteFrame", "ZoneTextFrame", "SubZoneTextFrame",
   "WorldFrame", "GameTooltip", "LootFrame", "UIParent" }) do add("native", "Client frames", "native", n) end
 
+local SM = AFUI.SafeMeasure
+
 ---------------------------------------------------------------- geometry
 local function isProtected(f)
   if f.IsProtected and f:IsProtected() then return true end
@@ -201,26 +210,27 @@ local function wanted(ours, win)
 end
 
 local function pointsMatch(f, want)
+  if AFUI.MeasureBlocked(f) then return true end -- cannot be read: never re-laid on a guess
   for i, w in ipairs(want) do
-    local p, rel, rp, x, y = f:GetPoint(i)
+    local p, rel, rp, x, y = SM(f, "GetPoint", i)
     if p ~= w[1] or rel ~= w[2] or rp ~= w[3] or not near(x, w[4]) or not near(y, w[5]) then return false end
   end
-  return f:GetPoint(#want + 1) == nil
+  return SM(f, "GetPoint", #want + 1) == nil
 end
 
 -- Offsets are in the frame's own scale: a stand-in at our effective scale means the same numbers on both.
 local function scaleOff(e, f, ours)
   if e.region or not (f.SetScale and f.GetEffectiveScale and ours.GetEffectiveScale) then return false end
-  local a, b = f:GetEffectiveScale(), ours:GetEffectiveScale()
+  local a, b = SM(f, "GetEffectiveScale"), ours:GetEffectiveScale()
   return (a and b and a > 0 and b > 0 and math.abs(a / b - 1) > 0.001) and true or false
 end
 
 -- Left, bottom, width, height in UI units (the frame's own scale folded in), or nil while the frame has no rect.
 local function rect(f)
   if not (f and f.GetLeft) then return end
-  local l, b, r, t = f:GetLeft(), f:GetBottom(), f:GetRight(), f:GetTop()
+  local l, b, r, t = SM(f, "GetLeft"), SM(f, "GetBottom"), SM(f, "GetRight"), SM(f, "GetTop")
   if not (l and b and r and t) then return end
-  local s = (f.GetEffectiveScale and f:GetEffectiveScale() or 1) / (UIParent.GetEffectiveScale and UIParent:GetEffectiveScale() or 1)
+  local s = (SM(f, "GetEffectiveScale") or 1) / (UIParent.GetEffectiveScale and UIParent:GetEffectiveScale() or 1)
   return l * s, b * s, (r - l) * s, (t - b) * s
 end
 
@@ -305,6 +315,7 @@ end
 -- no such frame), "noours" (our frame is not built yet) or "skip" (real / native / child).
 function AC.Sync(e)
   if e.mode ~= "track" and e.mode ~= "ghost" then return "skip" end
+  if not AC.GroupOn(e) then return "skip" end -- the window is the client's own now: nothing is laid over anything
   local f = _G[e.name]
   if not f then return "missing" end
   local ours, win = e.ours()
@@ -361,12 +372,17 @@ function AC.AdoptPlate(plate)
     AFUI.RunOutOfCombat(AC.FlushPlates)
     return false
   end
+  -- Blizzard's plate frames are never read back (see "measuring"): laid over ours blind, once per NAME_PLATE_UNIT_ADDED; a forbidden one is left alone.
   local pairs_ = { { uf, s.frame }, { uf.healthBar, s.hp }, { uf.castBar, s.castBox } }
   syncing = true
   for _, p in ipairs(pairs_) do
     local f, ours = p[1], p[2]
-    if f and ours and not pointsMatch(f, wanted(ours)) then
-      f:ClearAllPoints(); f:SetPoint("TOPLEFT", ours, "TOPLEFT", 0, 0); f:SetPoint("BOTTOMRIGHT", ours, "BOTTOMRIGHT", 0, 0)
+    if f then AFUI.NoMeasure(f) end
+    if f and ours and not (f.IsForbidden and f:IsForbidden()) then
+      local good, err = pcall(function()
+        f:ClearAllPoints(); f:SetPoint("TOPLEFT", ours, "TOPLEFT", 0, 0); f:SetPoint("BOTTOMRIGHT", ours, "BOTTOMRIGHT", 0, 0)
+      end)
+      if not good then AFUI.MeasureReport.n = AFUI.MeasureReport.n + 1; AFUI.MeasureReport.first = AFUI.MeasureReport.first or tostring(err) end
     end
   end
   syncing = false
@@ -381,10 +397,10 @@ function AC.PlateAnchor(plate) return plate and plate.afuiSkin and plate.afuiSki
 
 ---------------------------------------------------------------- report
 local function pointCount(f)
-  local c = f.GetNumPoints and f:GetNumPoints()
+  local c = f.GetNumPoints and SM(f, "GetNumPoints")
   if type(c) == "number" then return c end
   local n = 0
-  while f:GetPoint(n + 1) ~= nil do n = n + 1 end
+  while SM(f, "GetPoint", n + 1) ~= nil do n = n + 1 end
   return n
 end
 
@@ -392,6 +408,8 @@ function AC.Check(e)
   local f = _G[e.name]
   local r = { name = e.name, mode = e.mode, group = e.group, exists = f ~= nil, ok = true }
   if not f then r.note = "absent on this client"; return r end
+  if not AC.GroupOn(e) then r.note = "the client's own (switched off in Settings > Windows)"; return r end
+  if AFUI.MeasureBlocked(f) then r.shown, r.alpha, r.anchors, r.note = f:IsShown() and true or false, 1, 0, "restricted by the client: not measured"; return r end
   r.shown = f:IsShown() and true or false
   r.visible = (f.IsVisible and f:IsVisible()) and true or false
   r.alpha = f.GetAlpha and f:GetAlpha() or 1
@@ -448,6 +466,7 @@ function AC.Report(all)
     if all and r.exists then lines[#lines + 1] = "  " .. fmt(r) end
   end
   local out = { string.format("Aztra's Forever UI: %d client frames covered (%s).", #AC.entries, all and "every frame" or "/afui anchors all lists every frame") }
+  if AFUI.MeasureReport.n > 0 then out[#out + 1] = string.format("  %d restricted client frame(s) are not measured (first: %s)", AFUI.MeasureReport.n, AFUI.MeasureReport.first) end
   if not all then
     for _, name in ipairs(order) do
       local g = groups[name]

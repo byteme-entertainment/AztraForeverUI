@@ -1,6 +1,6 @@
 # Aztra's Forever UI
 
-> **Version 0.94 Beta.** This addon was specifically designed for **Crusader-Storm**. It is a public beta: please report anything odd. [Download the latest version](https://github.com/byteme-entertainment/AztraForeverUI/releases/latest) · [Changelog](CHANGELOG.md)
+> **Version 0.95 Beta.** This addon was specifically designed for **Crusader-Storm**. It is a public beta: please report anything odd. [Download the latest version](https://github.com/byteme-entertainment/AztraForeverUI/releases/latest) · [Changelog](CHANGELOG.md)
 
 **Make World of Warcraft: The Burning Crusade Classic look and play like Blizzard's *WoW: Forever UI*.**
 
@@ -73,6 +73,17 @@ More detail: [INSTALL.md](INSTALL.md).
 
 ![Settings](screenshots/settings-general.png)
 
+## Raid-style frames: aura filters
+
+The raid-style party frames (Edit Mode > Party Frames > Use Raid-Style Party Frames) can show exactly the buffs and debuffs you care about, like ElvUI's filters but with a nicer way to build the lists. Open **Aura Filters** with `/afui filters`, from Settings > General, or with the **Aura Filters...** button in the Party Frames settings of Edit Mode.
+
+- **Modes, per aura type (buffs, debuffs):** All, Only mine, Only list, All except list, Mine + list (your auras plus the list from anyone). Extras: only dispellable debuffs, always show boss debuffs, hide permanent buffs, hide buffs longer than N minutes, max icons, sort (Priority, Time left, Mine first, Aura order).
+- **Lists:** a built-in starter set (Resto Druid HoTs, Priest, Shaman and Paladin, Raid defensive cooldowns, Raid utility buffs, Raid debuffs for the Burning Crusade raids) that you can copy and edit, and lists of your own: new, duplicate, rename, delete, export and import as text (`AFUIF1:...`). Each entry can be "mine only", have a priority and its own highlight colour. Spells match by id and by name, so every rank of a spell matches. Use one list on the whole account and another on a single character.
+- **Adding spells:** type a name (suggestions from your spellbook and from the auras seen), type an id, add the auras on your target or the unit under the mouse, pick from the recently seen auras of you and your group, or drag a spell from the spellbook onto the list.
+- **Look:** icon size, corner and growth direction, cooldown swipe, time left, stack count, border by debuff type, gold highlight for priority entries, and an optional outline of the whole frame when a debuff you can dispel is on a member.
+
+Example: a Resto Druid picks the list *Healer: Resto Druid HoTs*, mode *Only list*: only your own Rejuvenation, Regrowth and Lifebloom show, so another druid's HoTs or a tank's pre-HoT never crowd the icons.
+
 ## Slash commands
 
 | Command | What it does |
@@ -97,6 +108,23 @@ More detail: [INSTALL.md](INSTALL.md).
 - Another addon that replaces the same frames (action bars, bags, unit frames) will clash.
 - Not every Forever window exists in the Classic client, so some Forever features have nothing to attach to. Features of the modern game that the 2.5.3 client cannot do are not faked.
 - The addon is large (about 80 MB), mostly textures.
+
+## Windows: keep Blizzard's own where you prefer it
+
+Every window or panel Aztra's Forever UI draws has its own switch under **Settings > Windows**, so you can keep Blizzard's version of just one window and use ours for the rest. **On** is Aztra's Forever UI's version (the default). **Off** is Blizzard's own window, completely native: none of our skins, hooks, key bindings, Esc menu buttons, tooltips or Edit Mode entries stay active for it. A change is read when the game starts, so the page shows "Waiting for a reload" and has a **Reload the UI to apply** button. **Use all Blizzard windows** and **Use all Forever windows** set every window at once (the HUD section keeps its own choice). If you turn the Game menu off, type `/afui` to open these settings.
+
+![Windows settings](screenshots/settings-windows.png)
+
+| Section | Switches |
+| --- | --- |
+| Character & spells | Character window (C), Spellbook (P), Talents (N), Professions (K) |
+| World & quests | Map & quest log (L), Objective tracker |
+| Social | Friends, Who & Raid, Guild windows (G, J), Group Finder |
+| Bags & vendors | Bags & Bank, Vendor window, Sell Junk button, Trainer window, Mailbox (beta), Auction house (beta), Loot window, Loot roll windows |
+| Dialogs & menus | Dialogs & dropdown menus, Game menu (Esc) |
+| HUD | Minimap, Buffs & debuffs, Action bars, Unit frames, Party frames, Nameplates, Chat, Tooltips |
+
+The mailbox and the auction house are still beta and start **off**; everything else starts **on**. Your older choices (the mailbox, auction house, dialogs and loot roll options that were on the General page) carry over. Bags and the bank share one switch, and so do the unit frames and the cast bars.
 
 ## Compatibility
 

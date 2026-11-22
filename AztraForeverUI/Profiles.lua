@@ -69,7 +69,8 @@ function P.Capture()
   else
     layout = { preset = name }
   end
-  return { settings = scalarTable(acc), charSettings = scalarTable(chr), layout = layout }
+  local filters = AFUI.AuraFilters and AFUI.AuraFilters.SnapshotText and AFUI.AuraFilters.SnapshotText() or nil -- the aura filter library travels with the profile
+  return { settings = scalarTable(acc), charSettings = scalarTable(chr), layout = layout, auraFilters = filters }
 end
 
 -- Stores the live state in this character's profile.
@@ -112,6 +113,7 @@ function P.Load(name, apply)
     done = landed and L.SetActive("char", landed)
   end
   if not done then L.SetActive("preset", "Modern") end
+  if AFUI.AuraFilters and AFUI.AuraFilters.RestoreText and type(p.auraFilters) == "string" then AFUI.AuraFilters.RestoreText(p.auraFilters) end -- a profile saved before the filters keeps the current library
   charDB().profile = name
   if apply then
     L.Apply((L.GetActive()))
@@ -318,6 +320,7 @@ function P.Serialize(p)
     lines[#lines + 1] = "l\t" .. tostring(lay.name or ""):gsub("[%c]", "")
     lines[#lines + 1] = "L\t" .. L.Serialize(lay)
   end
+  if type(p.auraFilters) == "string" and p.auraFilters:find("^AFUIF%d+:%x+:[%w%+/=]+$") then lines[#lines + 1] = "f\t" .. p.auraFilters end
   local body = table.concat(lines, "\n")
   return TAG .. VERSION .. ":" .. checksum(body) .. ":" .. b64enc(body)
 end
@@ -352,6 +355,9 @@ function P.Deserialize(text)
     elseif tag == "p" then
       if not AFUI.PRESETS[a] then return nil, "bad data" end
       p.layout = { preset = a }
+    elseif tag == "f" then
+      if not (AFUI.AuraFilters and AFUI.AuraFilters.Deserialize(a)) then return nil, "bad data" end -- the filter library of the profile, checked by its own reader
+      p.auraFilters = a
     elseif tag == "l" then pendingName = a
     elseif tag == "L" then
       local layout = L.Import(line:sub(3))
@@ -657,3 +663,4 @@ if S and S.Register then
     tooltip = "Paste a profile string and name it. It is checked before anything is saved, and added to the list without switching to it." }
 end
 refreshChoices()
+AFUI.On("ADDON_LOADED", function(_, addon) if addon == "AztraForeverUI" then refreshChoices() end end) -- the saved profiles are not there while the files load: listed again once Init (the handler above) ran

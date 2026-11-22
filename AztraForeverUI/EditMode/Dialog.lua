@@ -429,7 +429,13 @@ local function dropdownRow(parent, key, def)
     refresh = function(v) dd:SetText(v or def.options[1]) end }
 end
 
-local BUILDERS = { slider = sliderRow, checkbox = checkRow, dropdown = dropdownRow }
+-- A red button that opens something (def.onClick): "Filters..." of the raid-style party frames. It stores no setting.
+local function buttonRow(parent, key, def)
+  local b = W.RedButton(parent, "AFUI_EditModeButton_" .. key .. "_" .. def.id, def.label, 303, 28, nil, 0, 0, function() if def.onClick then def.onClick() end end)
+  return { frame = b, height = ROW_H, dy = 2, refresh = function() end }
+end
+
+local BUILDERS = { slider = sliderRow, checkbox = checkRow, dropdown = dropdownRow, button = buttonRow }
 
 local function hideRows()
   for _, byId in pairs(rows) do

@@ -15,7 +15,7 @@ R.BUTTONS = { { "NeedButton", "RollButton" }, { "GreedButton" }, { "DisenchantBu
 local WHITE = "Interface\\Buttons\\WHITE8X8"
 
 local function g(n) return n and _G[n] end
-function R.Enabled() return AFUI.GetSetting("lootRollRestyle", true) and true or false end
+function R.Enabled() return AFUI.ModuleEnabled("lootroll") end -- Settings > Windows (useLootRoll; the old lootRollRestyle setting still counts)
 
 -- A part of a roll frame: its field (clients that name it by parentKey) or its global name (GroupLootFrameN .. suffix).
 local function part(f, key, suffix)
@@ -78,8 +78,4 @@ function R.Setup()
   for i = 1, _G.NUM_GROUP_LOOT_FRAMES or 4 do R.Skin(i) end
 end
 
-if AFUI.Settings and AFUI.Settings.Register then
-  AFUI.Settings.Register{ category = "general", key = "lootRollRestyle", type = "check", default = true, label = "Forever loot roll windows",
-    tooltip = "Draws the Need / Greed / Pass windows of group loot in the Forever look. Switching it off takes effect after /reload." }
-end
 AFUI.RegisterModule("LootRoll", { OnLogin = R.Setup })

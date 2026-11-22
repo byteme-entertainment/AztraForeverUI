@@ -12,7 +12,7 @@
 AFUI = AFUI or {}
 local IS_243 = AFUI.IS_243
 local CP = { frames = {}, preview = false, POWER_H = 4, MEMBERS = 5, INSET = 4, BAND = 2, OUT_OF_RANGE_ALPHA = 0.55,
-  MAX_BUFFS = 3, MAX_DEBUFFS = 3, MAX_DISPEL = 3,
+  MAX_BUFFS = 8, MAX_DEBUFFS = 8, MAX_DISPEL = 3, -- the icon pools; how many show is the filter's "Max icons" (AuraFilters.lua, 3 by default)
   SORT = { "Group", "Alphabetical" }, HEALTH_TEXT = { "None", "Health Remaining", "Health Lost", "Percentage" },
   DEFAULTS = { useRaidStyle = false, frameWidth = 72, frameHeight = 36, sortBy = "Group", useHorizontal = false, displayBorder = true,
     displayPets = false, displayPowerBar = false, useClassColors = true, onlyDispellable = false, healthText = "None" } }
@@ -78,15 +78,15 @@ local function icon(parent, w, h, path)
   return t
 end
 
-local function auraButton(parent, debuff)
+-- One pooled aura icon: icon, swipe, stack count (bottom right), the time left (centre, when asked for) and the border (dispel colour, the entry's own colour or the highlight).
+local function auraButton(parent)
   local b = CreateFrame("Frame", nil, parent)
   b.icon = b:CreateTexture(nil, "ARTWORK"); b.icon:SetAllPoints(b)
   b.cd = CreateFrame("Cooldown", nil, b, "CooldownFrameTemplate"); b.cd:SetAllPoints(b)
-  b.count = b:CreateFontString(nil, "OVERLAY", "NumberFontNormalSmall"); b.count:SetPoint("BOTTOMRIGHT", b, "BOTTOMRIGHT", 0, 0) -- stack: bottom right
-  if debuff then
-    b.border = b:CreateTexture(nil, "OVERLAY"); b.border:SetAllPoints(b)
-    b.border:SetTexture("Interface\\Buttons\\UI-Debuff-Overlays"); b.border:SetTexCoord(0.296875, 0.5703125, 0, 0.515625)
-  end
+  b.count = b:CreateFontString(nil, "OVERLAY", "NumberFontNormalSmall"); b.count:SetPoint("BOTTOMRIGHT", b, "BOTTOMRIGHT", 0, 0)
+  b.time = b:CreateFontString(nil, "OVERLAY", "NumberFontNormalSmall"); b.time:SetPoint("TOP", b, "TOP", 0, -1)
+  b.border = b:CreateTexture(nil, "OVERLAY"); b.border:SetAllPoints(b)
+  b.border:SetTexture("Interface\\Buttons\\UI-Debuff-Overlays"); b.border:SetTexCoord(0.296875, 0.5703125, 0, 0.515625); b.border:Hide()
   b:Hide()
   return b
 end
@@ -237,8 +237,11 @@ local function build(i)
   f.looter = icon(top, 12, 12, "Interface\\GroupFrame\\UI-Group-MasterLooter")
   f.raidTarget = icon(top, 14, 14, "Interface\\TargetingFrame\\UI-RaidTargetingIcons")
   f.buffs, f.debuffs, f.dispel = {}, {}, {}
-  for n = 1, CP.MAX_BUFFS do f.buffs[n] = auraButton(top, false) end
-  for n = 1, CP.MAX_DEBUFFS do f.debuffs[n] = auraButton(top, true) end
+  f.auraLists = { f.buffs, f.debuffs, f.dispel }
+  if not f.mini then -- the mini (pet) frames show no auras
+    for n = 1, CP.MAX_BUFFS do f.buffs[n] = auraButton(top) end
+    for n = 1, CP.MAX_DEBUFFS do f.debuffs[n] = auraButton(top) end
+  end
   if ART then
     for n = 1, CP.MAX_DISPEL do f.dispel[n] = icon(top, 12, 12, ART.debuff .. "Magic") end
   end
@@ -279,13 +282,35 @@ function CP.Resize()
   CP.container:SetWidth(pw); CP.container:SetHeight(ph)
 end
 
+-- The aura icons of one frame: size, corner and growth direction from the Aura Filters window (AuraFilters.lua display options), scaled with the frame like the client's.
+-- Defaults: 11 px buffs bottom right going left, debuffs bottom left going right.
+local GROW = { Left = { -1, 0 }, Right = { 1, 0 }, Up = { 0, 1 }, Down = { 0, -1 } }
+function CP.LayoutAuras(f, scale)
+  local AF = AFUI.AuraFilters
+  if not (AF and not f.mini) then return end
+  local s = CP.settings
+  scale = scale or math.min(s.frameHeight / 36, s.frameWidth / 72)
+  local I = CP.INSET
+  local lift = I + (s.displayPowerBar and CP.POWER_H + 1 or 0)
+  for _, kind in ipairs(AF.KINDS) do
+    local d, buttons = AF.Display("party", kind), f[kind]
+    local corner = AF.CORNER[d.anchor] or "BOTTOMRIGHT"
+    local size, g = d.size * scale, GROW[d.growth] or GROW.Left
+    local top = corner:find("TOP") ~= nil
+    local sx = corner:find("LEFT") and 1 or -1
+    for n, b in ipairs(buttons) do
+      b:SetWidth(size); b:SetHeight(size); b:ClearAllPoints()
+      b:SetPoint(corner, f, corner, sx * I + g[1] * (n - 1) * size, (top and -I or 1 + lift) + g[2] * (n - 1) * size)
+    end
+  end
+end
+
 -- Sizes and anchors: out of combat only.
 function CP.Layout()
   local s = CP.settings
   local w, h = s.frameWidth, s.frameHeight
   CP.Resize()
   local scale = math.min(h / 36, w / 72) -- the client's componentScale
-  local aura = 11 * scale
   for _, f in ipairs(CP.frames) do
     local mini = f.mini
     local fh = mini and petHeight(s) or h
@@ -310,15 +335,7 @@ function CP.Layout()
     f.leader:ClearAllPoints(); f.leader:SetPoint("TOPLEFT", f, "TOPLEFT", I, -I)
     f.looter:ClearAllPoints(); f.looter:SetPoint("TOPLEFT", f, "TOPLEFT", I, -I)
     f.raidTarget:ClearAllPoints(); f.raidTarget:SetPoint("RIGHT", f, "RIGHT", -I, 0)
-    local lift = I + (power and CP.POWER_H + 1 or 0)
-    for n, b in ipairs(f.buffs) do -- bottom right, going left
-      b:SetWidth(aura); b:SetHeight(aura); b:ClearAllPoints()
-      b:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -I - (n - 1) * aura, 1 + lift)
-    end
-    for n, b in ipairs(f.debuffs) do -- bottom left, going right
-      b:SetWidth(aura); b:SetHeight(aura); b:ClearAllPoints()
-      b:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", I + (n - 1) * aura, 1 + lift)
-    end
+    CP.LayoutAuras(f, scale)
     for n, t in ipairs(f.dispel) do -- top right, going left
       t:SetWidth(12 * scale); t:SetHeight(12 * scale); t:ClearAllPoints()
       t:SetPoint("TOPRIGHT", f, "TOPRIGHT", -I - (n - 1) * 12 * scale, -I)
@@ -428,69 +445,106 @@ function CP.DrawIcons(f)
   end
 end
 
--- UnitBuff / UnitDebuff differ between the clients: 2.4.3 (name, rank, icon, count, type, duration, expires, isMine), 2.5.3 (name, icon, count, type,
--- duration, expires, caster).
-local function aura(fn, unit, i, filter)
-  if IS_243 then
-    local name, _, tex, count, kind, duration, expires, mine = fn(unit, i, filter)
-    return name, tex, count, kind, duration, expires, mine
-  end
-  local name, tex, count, kind, duration, expires, caster = fn(unit, i, filter)
-  return name, tex, count, kind, duration, expires, caster == "player" or caster == "pet" or caster == "vehicle"
+-- The auras (AuraFilters.lua decides which: the mode, the list, the extras, the order and how many; UnitBuff / UnitDebuff differ between the clients, it reads both).
+-- Nothing is allocated here: the result tables, the dispel type list and the icons are reused. Drawing only: safe in combat.
+local GOLD = { 1, 0.82, 0 }
+local RESULT = { buffs = { n = 0 }, debuffs = { n = 0 } }
+local KINDS_SEEN = {}
+
+-- The time left as a number: a string is made only when the second changed.
+local function stamp(b, now)
+  local sec = math.floor(b.expires - now + 0.5)
+  if sec == b.lastSec then return end
+  b.lastSec = sec
+  if sec <= 0 then b.time:SetText("") elseif sec >= 60 then b.time:SetText(math.floor(sec / 60) .. "m") else b.time:SetText(sec) end
 end
 
-local function setAura(b, tex, count, duration, expires, kind, debuff)
-  b.icon:SetTexture(tex)
-  if count and count > 1 then b.count:SetText(count); b.count:Show() else b.count:SetText(""); b.count:Hide() end
-  if duration and duration > 0 and expires then
+local function setAura(b, r, d, debuff)
+  b.icon:SetTexture(r.icon)
+  local count = r.count
+  if d.stacks and count and count > 1 then b.count:SetText(count); b.count:Show() else b.count:SetText(""); b.count:Hide() end
+  local duration, expires = r.duration, r.expires
+  local timed = duration and duration > 0 and expires and expires > 0
+  if d.swipe and timed then
     local start = expires - duration
     if CooldownFrame_Set then CooldownFrame_Set(b.cd, start, duration, 1) elseif CooldownFrame_SetTimer then CooldownFrame_SetTimer(b.cd, start, duration, 1) end
     b.cd:Show()
   else
     b.cd:Hide()
   end
-  if debuff then
-    local c = DebuffTypeColor and (DebuffTypeColor[kind or "none"] or DebuffTypeColor.none) or { r = 0.8, g = 0, b = 0 }
-    b.border:SetVertexColor(c.r, c.g, c.b)
-  end
+  if timed and d.timer then b.expires = expires; stamp(b, GetTime())
+  else b.expires = nil; if b.lastSec then b.lastSec = nil; b.time:SetText("") end end
+  -- the border: the entry's own colour, else a debuff's dispel colour, else the gold of a high priority entry
+  local cr, cg, cb
+  if r.cr then cr, cg, cb = r.cr, r.cg, r.cb
+  elseif debuff and d.typeBorder then
+    local c = DebuffTypeColor and (DebuffTypeColor[r.kind or "none"] or DebuffTypeColor.none) or nil
+    if c then cr, cg, cb = c.r, c.g, c.b else cr, cg, cb = 0.8, 0, 0 end
+  elseif d.highlight and r.hi then cr, cg, cb = GOLD[1], GOLD[2], GOLD[3] end
+  if cr then b.border:SetVertexColor(cr, cg, cb); b.border:Show() else b.border:Hide() end
   b:Show()
 end
 
--- Buffs you cast (bottom right), debuffs (bottom left, "Display Only Dispellable Debuffs" keeps the ones you can dispel), and the dispellable types
--- as icons top right plus the frame outline in the first type's colour.
-function CP.DrawAuras(f)
-  local unit = f.unit
-  for _, list in ipairs({ f.buffs, f.debuffs, f.dispel }) do for _, b in ipairs(list) do b:Hide() end end
-  f.dispelGlow:Hide()
-  if f.mini or not UnitExists(unit) or not UnitBuff then return end
-  local n = 0
-  for i = 1, 40 do
-    local name, tex, count, kind, duration, expires, mine = aura(UnitBuff, unit, i)
-    if not name then break end
-    if mine and n < CP.MAX_BUFFS then n = n + 1; setAura(f.buffs[n], tex, count, duration, expires, kind, false) end
-  end
-  n = 0
-  local only = CP.settings.onlyDispellable and RAID_FILTER or nil
-  for i = 1, 40 do
-    local name, tex, count, kind, duration, expires = aura(UnitDebuff, unit, i, only)
-    if not name then break end
-    if n < CP.MAX_DEBUFFS then n = n + 1; setAura(f.debuffs[n], tex, count, duration, expires, kind, true) end
-  end
-  n = 0
-  local seen = {}
-  for i = 1, 40 do
-    local name, _, _, kind = aura(UnitDebuff, unit, i, RAID_FILTER)
-    if not name then break end
-    if kind and not seen[kind] then
-      seen[kind] = true
-      n = n + 1
-      if ART and f.dispel[n] then f.dispel[n]:SetTexture(ART.debuff .. kind); f.dispel[n]:Show() end
-      if n == 1 then
-        local c = DebuffTypeColor and DebuffTypeColor[kind]
-        if c then f.dispelGlow:SetVertexColor(c.r, c.g, c.b); f.dispelGlow:Show() end
+-- The time left on the icons that show it, once a second (a string is made only when the second changed).
+function CP.TickTimers()
+  local now = GetTime()
+  for _, f in ipairs(CP.frames) do
+    if f:IsShown() and not f.mini then
+      for _, list in ipairs(f.auraLists) do
+        for n = 1, #list do
+          local b = list[n]
+          if b.expires and b:IsShown() then stamp(b, now) end
+        end
       end
     end
   end
+end
+
+-- Buffs and debuffs through the filters (bottom right and bottom left unless the window says otherwise), and the dispellable types as icons top right plus the frame
+-- outline in the first type's colour (what the client's own filter says you can dispel).
+function CP.DrawAuras(f)
+  f.auraDirty = false
+  local unit = f.unit
+  local lists = f.auraLists
+  for l = 1, 3 do local list = lists[l]; for n = 1, #list do list[n]:Hide() end end
+  f.dispelGlow:Hide()
+  local AF = AFUI.AuraFilters
+  if f.mini or not AF or not UnitExists(unit) or not UnitBuff then return end
+  local D = AF.DisplayOf("party")
+  local n = AF.Collect(unit, false, AF.Resolve("party", "buffs"), RESULT.buffs)
+  for i = 1, n do setAura(f.buffs[i], RESULT.buffs[i], D.buffs, false) end
+  n = AF.Collect(unit, true, AF.Resolve("party", "debuffs"), RESULT.debuffs, CP.settings.onlyDispellable and RAID_FILTER or nil)
+  for i = 1, n do setAura(f.debuffs[i], RESULT.debuffs[i], D.debuffs, true) end
+  n = 0
+  for i = 1, 40 do
+    local name, kind, _
+    if IS_243 then name, _, _, _, kind = UnitDebuff(unit, i, RAID_FILTER) else name, _, _, kind = UnitDebuff(unit, i, RAID_FILTER) end
+    if not name then break end
+    if kind then
+      local known = false
+      for k = 1, n do if KINDS_SEEN[k] == kind then known = true; break end end
+      if not known then
+        n = n + 1; KINDS_SEEN[n] = kind
+        if ART and f.dispel[n] then f.dispel[n]:SetTexture(ART.debuff .. kind); f.dispel[n]:Show() end
+        if n == 1 and D.dispelHighlight then
+          local c = DebuffTypeColor and DebuffTypeColor[kind]
+          if c then f.dispelGlow:SetVertexColor(c.r, c.g, c.b); f.dispelGlow:Show() end
+        end
+      end
+    end
+  end
+end
+
+-- UNIT_AURA marks the frames of that unit and the next frame draws them once (CP.FlushAuras, from the container's OnUpdate): a raid-wide burst costs one pass per unit.
+function CP.MarkAuras(unit)
+  for _, f in ipairs(CP.frames) do
+    if not unit or f.unit == unit or f.realUnit == unit then f.auraDirty = true; CP.auraPending = true end
+  end
+end
+function CP.FlushAuras()
+  if not CP.auraPending then return end
+  CP.auraPending = false
+  for _, f in ipairs(CP.frames) do if f.auraDirty then CP.DrawAuras(f) end end
 end
 
 -- Everything of one frame. Drawing only: safe in combat.
@@ -621,12 +675,20 @@ function CP.Setup()
   local function each(fn) return function(_, unit)
     for _, f in ipairs(CP.frames) do if not unit or f.unit == unit or f.realUnit == unit then fn(f) end end
   end end
-  local bars, auras = each(CP.DrawBars), each(CP.DrawAuras)
+  local bars = each(CP.DrawBars)
   AFUI.On("UNIT_HEALTH", bars); AFUI.On("UNIT_MAXHEALTH", bars)
   for _, e in ipairs(AFUI.POWER_EVENTS) do AFUI.On(e, bars) end
   AFUI.On("UNIT_NAME_UPDATE", function(e, unit) each(CP.Draw)(e, unit); if CP.settings.sortBy == "Alphabetical" then AFUI.RunOutOfCombat(CP.Refresh) end end)
   AFUI.On("UNIT_CONNECTION", each(CP.Draw)); AFUI.On("UNIT_FLAGS", each(CP.Draw)); AFUI.On("PLAYER_FLAGS_CHANGED", each(CP.Draw))
-  AFUI.On("UNIT_AURA", auras)
+  AFUI.On("UNIT_AURA", function(_, unit) CP.MarkAuras(unit) end)
+  local AF = AFUI.AuraFilters
+  if AF then -- a list, assignment or display option changed: icons laid out again (out of combat) and every frame redrawn
+    AF.OnChange(function()
+      AFUI.RunOutOfCombat(function() for _, f in ipairs(CP.frames) do CP.LayoutAuras(f) end end)
+      CP.MarkAuras(); CP.FlushAuras()
+    end)
+    AFUI.On("SPELLS_CHANGED", function() CP.MarkAuras() end)
+  end
   AFUI.On("UNIT_THREAT_SITUATION_UPDATE", each(CP.DrawHighlights))
   AFUI.On("PLAYER_TARGET_CHANGED", function() for _, f in ipairs(CP.frames) do CP.DrawHighlights(f) end end)
   for _, e in ipairs({ "RAID_TARGET_UPDATE", "PARTY_LEADER_CHANGED", "PARTY_LOOT_METHOD_CHANGED" }) do
@@ -642,10 +704,12 @@ function CP.Setup()
   AFUI.On("CVAR_UPDATE", function() AFUI.RunOutOfCombat(CP.NativeOff) end)
   local acc = 0
   c:SetScript("OnUpdate", function(_, elapsed)
+    if CP.auraPending then CP.FlushAuras() end
     acc = acc + elapsed
     if acc < 0.2 then return end
     acc = 0
     CP.UpdateRange()
+    CP.TickTimers()
   end)
   CP.NativeOff()
 end

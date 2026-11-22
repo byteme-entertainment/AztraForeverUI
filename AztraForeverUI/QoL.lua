@@ -12,6 +12,8 @@ Q.DEFAULTS = {
   bagQuestMarker = true, bagUpgradeArrow = true, bagAutoOpen = true, bagGroupCategory = false, bagDontSell = true,
   bagGrayJunk = true, bagRedUnusable = true, bankCombine = true,
 }
+-- The combined bags / bank layout (read as numbers through AFUI.GetSetting, see BagLayout.Prefs): columns 0 = Auto, slot size in %, spacing in px.
+Q.NUMBERS = { bagColumns = 0, bankColumns = 0, bagSlotSize = 100, bankSlotSize = 100, bagSlotGap = 1, bankSlotGap = 1 }
 
 if not AFUI.GetSetting then
   function AFUI.GetSetting(key)

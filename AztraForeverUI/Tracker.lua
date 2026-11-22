@@ -21,6 +21,7 @@ local box = CreateFrame("Frame", "AFUI_ObjectiveTracker", UIParent) -- the Edit 
 box:SetWidth(T.WIDTH); box:SetHeight(T.BOX_H)
 box:SetFrameStrata("LOW")
 box:SetPoint("TOPRIGHT", UIParent, "TOPRIGHT", -122, -287) -- Presets.lua owns the real default (under the minimap, left of the right bars)
+box:Hide() -- Refresh shows it while there is something to list: with the Objective tracker switched off (Settings > Windows) it never is
 T.frame = box
 
 ---------------------------------------------------------------- pure helpers (specs)
@@ -455,7 +456,7 @@ end
 -- Edit Mode with nothing tracked shows sample lines, so the box has something to move (Forever's preview).
 local SAMPLE = { { title = "[20] Sample Quest", index = 0, name = "Sample Quest", lines = { { text = "0/10 Sample Objective", done = false } } } }
 function T.Refresh()
-  if T.busy or T.inert then return end
+  if T.busy or T.inert or not AFUI.ModuleEnabled("tracker") then return end -- switched off (Settings > Windows): the client's own quest list is the visible one
   T.busy = true
   local ok, err = pcall(function()
     local entries = T.Collect(describe)

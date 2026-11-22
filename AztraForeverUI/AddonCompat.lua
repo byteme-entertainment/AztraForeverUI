@@ -11,9 +11,12 @@
 -- Every call into an adapter is pcall'd: a failure is reported ONCE per adapter and call through the error handler, never repeated, and never stops the others.
 --
 -- TAKEOVER SWITCHES  AFUI.ModuleEnabled(group) is read when a takeover module would start (Core.lua skips the OnLogin of the modules of a group that is off and calls
---   their OnYield, if any; Chat.lua asks at the top of its file). The answer is decided once per session and kept: the player's choice (Settings > Compatibility,
+--   their OnYield, if any; Chat.lua asks from its ADDON_LOADED). The answer is decided once per session and kept: the player's choice (Settings > Compatibility,
 --   AztraForeverUIDB.settings.useBags ...), else ON, except OFF when an addon that draws the same thing is loaded (so a fresh install never fights Bagnon or ElvUI).
 --   A change takes effect after /reload. Nothing of the other addon is ever disabled by us.
+--   The same switches carry the WINDOW SWITCHES of Settings > Windows (groups with window = true: useCharacter, useSpellbook ... useBuffs): the client's own window instead of ours,
+--   never decided by a clashing addon (default ON, OFF for the beta mailbox and auction house: default = false), with the older restyle settings (legacy = "mailRestyle" ...) as
+--   the initial choice. They are asked at login or later, never while the files load.
 local AFUI = AFUI
 local AC = {}
 AFUI.AddonCompat = AC
@@ -39,7 +42,64 @@ AC.GROUPS = {
     tip = "The world map window, the quest panel on it and the L key." },
   { id = "tooltips", key = "useTooltips", label = "Tooltips", modules = { "Tooltips" },
     tip = "The tooltip skin and the lines added to item and spell tooltips." },
+  -- The window switches (Settings > Windows): one per Blizzard panel we restyle or replace. window = true keeps them off the Compatibility page (no addon clashes
+  -- with them); default = false: a beta window, off until the player turns it on; legacy = the older setting, honoured until the new key is set.
+  { id = "character", key = "useCharacter", label = "Character window", modules = { "CharacterFrame" }, window = true,
+    tip = "The Character window (C): paper doll, Reputation, Skills, PvP and Pet panes, item levels and the side tabs." },
+  { id = "spellbook", key = "useSpellbook", label = "Spellbook", modules = { "Spellbook" }, window = true,
+    tip = "The Spellbook (P) with its pages, search, passives filter and the Mounts pane." },
+  { id = "talents", key = "useTalents", label = "Talents", modules = { "Talents" }, window = true,
+    tip = "The Talents window (N): the three trees, spent points and the talent search." },
+  { id = "professions", key = "useProfessions", label = "Professions", modules = { "Professions" }, window = true,
+    tip = "The Professions overview (K, /prof), its micro menu button and the restyled crafting windows (trade skills, Enchanting)." },
+  { id = "tracker", key = "useTracker", label = "Objective tracker", modules = { "Tracker" }, window = true,
+    tip = "The quest tracker under the minimap, with zones and automatic tracking." },
+  { id = "social", key = "useSocial", label = "Friends, Who & Raid", modules = { "SocialFrame" }, window = true,
+    tip = "The Social window: Friends, Ignore, Who and the Raid pages." },
+  { id = "guild", key = "useGuild", label = "Guild windows", modules = { "GuildWindow", "GuildCommunities" }, window = true,
+    tip = "The guild roster window (G) and Guild & Communities (J) with its chat." },
+  { id = "lfg", key = "useLFG", label = "Group Finder", modules = { "GroupFinder" }, window = true,
+    tip = "The Looking For Group window." },
+  { id = "gamemenu", key = "useGameMenu", label = "Game menu (Esc)", modules = { "GameMenu" }, window = true,
+    tip = "The Esc menu, with its Edit Mode and Aztra's Forever UI buttons. Off: type /afui to open these settings." },
+  { id = "merchant", key = "useMerchant", label = "Vendor window", modules = { "MerchantFrame" }, window = true,
+    tip = "The merchant window: buy, buy back and repair." },
+  { id = "vendortools", key = "useVendorTools", label = "Sell Junk button", modules = { "VendorTools" }, window = true,
+    tip = "The Sell Junk button on the vendor window and the automatic junk selling." },
+  { id = "trainer", key = "useTrainer", label = "Trainer window", modules = { "TrainerFrame" }, window = true,
+    tip = "The class and profession trainer window." },
+  { id = "mail", key = "useMail", label = "Mailbox (beta)", modules = { "MailFrame" }, window = true, default = false, legacy = "mailRestyle",
+    tip = "The mailbox: Inbox, Send Mail and the open letter. Still rough, so it starts off." },
+  { id = "auction", key = "useAuction", label = "Auction house (beta)", modules = { "AuctionFrame" }, window = true, default = false, legacy = "auctionRestyle",
+    tip = "The auction house. Still rough, so it starts off." },
+  { id = "dialogs", key = "useDialogs", label = "Dialogs & dropdown menus", modules = { "Dialogs" }, window = true, legacy = "dialogsRestyle",
+    tip = "The confirmation windows (Yes / No, name boxes) and the dropdown menus." },
+  { id = "lootroll", key = "useLootRoll", label = "Loot roll windows", modules = { "LootRoll" }, window = true, legacy = "lootRollRestyle",
+    tip = "The Need / Greed / Pass windows of group loot." },
+  { id = "loot", key = "useLoot", label = "Loot window", modules = { "Loot" }, window = true,
+    tip = "The window that lists what you can take from a corpse or chest." },
+  { id = "minimap", key = "useMinimap", label = "Minimap", modules = { "Minimap" }, window = true,
+    tip = "The round minimap with its ring, buttons, clock and coordinates." },
+  { id = "buffs", key = "useBuffs", label = "Buffs & debuffs", modules = { "Buffs" }, window = true,
+    tip = "The buff and debuff icons next to the minimap." },
 }
+-- The Windows page: its sections in order, each a list of group ids (the takeover switches of the Compatibility page appear here too, on the same keys).
+AC.WINDOW_SECTIONS = {
+  { "Character & spells", { "character", "spellbook", "talents", "professions" } },
+  { "World & quests", { "map", "tracker" } },
+  { "Social", { "social", "guild", "lfg" } },
+  { "Bags & vendors", { "bags", "merchant", "vendortools", "trainer", "mail", "auction", "loot", "lootroll" } },
+  { "Dialogs & menus", { "dialogs", "gamemenu" } },
+  { "HUD", { "minimap", "buffs", "actionbars", "unitframes", "party", "nameplates", "chat", "tooltips" } },
+}
+-- "Use all Blizzard / Forever windows" sets every switch of the sections but the HUD one: the HUD pieces are not windows and keep their own choice.
+function AC.BulkIds()
+  local out = {}
+  for _, sec in ipairs(AC.WINDOW_SECTIONS) do
+    if sec[1] ~= "HUD" then for _, id in ipairs(sec[2]) do out[#out + 1] = id end end
+  end
+  return out
+end
 AC.groupById = {}
 AFUI.ModuleGroup = AFUI.ModuleGroup or {}
 for _, g in ipairs(AC.GROUPS) do
@@ -139,12 +199,18 @@ function AC.ClashesFor(group, pending)
   return out
 end
 
--- nil until the player chose.
+-- nil until the player chose. The older restyle settings (grp.legacy: mailRestyle, dialogsRestyle ...) count as the choice until the new key is set.
 function AC.Explicit(group)
   local grp = AC.groupById[group]
-  return grp and AFUI.PeekSetting(grp.key, nil)
+  if not grp then return nil end
+  local v = AFUI.PeekSetting(grp.key, nil)
+  if v == nil and grp.legacy then v = AFUI.PeekSetting(grp.legacy, nil) end
+  return v
 end
-function AC.Default(group, pending) return #AC.ClashesFor(group, pending) == 0 end
+function AC.Default(group, pending)
+  local grp = AC.groupById[group]
+  return #AC.ClashesFor(group, pending) == 0 and not (grp and grp.default == false)
+end
 -- What the switch says now (it applies after /reload): the choice, else the default.
 function AC.Choice(group, pending)
   local v = AC.Explicit(group)
@@ -156,7 +222,9 @@ function AC.SetChoice(group, on)
   if grp then AFUI.SetSetting(grp.key, on and true or false) end
 end
 
--- What this session does (decided on the first ask, then kept: a module cannot be half started).
+-- What this session does (decided on the first ask, then kept: a module cannot be half started). The window switches (group.window) are only ever asked at login or later:
+-- the client loads the SavedVariables after our files ran (just before our ADDON_LOADED), so an answer given while the files load could not see the player's choice and would be
+-- kept for the session: NO file may ask while it loads (tests/tools/real_order.test.mjs lists every ask made at file scope; Chat.lua asks from its ADDON_LOADED).
 function AC.Enabled(group)
   local d = AC.decided[group]
   if d ~= nil then return d end
@@ -166,7 +234,7 @@ function AC.Enabled(group)
   local v = AC.Explicit(group)
   if v == nil then
     local clashes = AC.ClashesFor(group, pending)
-    v = #clashes == 0
+    v = AC.Default(group, pending)
     AC.why[group] = #clashes == 0 and "default" or ("default: " .. table.concat(clashes, ", ") .. " is loaded")
   else
     v = v and true or false
@@ -362,7 +430,7 @@ local OUTFITTER_FRAMES = { "OutfitterButtonFrame", "OutfitterButton", "Outfitter
 AC.Register("Outfitter", {
   kind = "integrate", addons = { "Outfitter" }, reapply = true,
   detect = function() return g("OutfitterFrame") ~= nil end,
-  apply = function() hookOutfitter(); moveOutfitter() end,
+  apply = function() if AC.Enabled("character") then hookOutfitter(); moveOutfitter() end end, -- Blizzard's own Character window: Outfitter's panel stays where Outfitter puts it
   frames = OUTFITTER_FRAMES,
   report = function()
     local out = {}
@@ -616,11 +684,13 @@ function AC.Report(print_)
     end
   end
   if not any then add("no known third-party addons loaded") end
-  local sw = {}
+  local sw, wsw = {}, {}
   for _, grp in ipairs(AC.GROUPS) do
-    sw[#sw + 1] = grp.label .. " = " .. (AC.Enabled(grp.id) and "ours" or "yielded") .. ((AC.Choice(grp.id) ~= AC.Enabled(grp.id)) and " (changes after /reload)" or "")
+    local list = grp.window and wsw or sw
+    list[#list + 1] = grp.label .. " = " .. (AC.Enabled(grp.id) and "ours" or (grp.window and "the client's own" or "yielded")) .. ((AC.Choice(grp.id) ~= AC.Enabled(grp.id)) and " (changes after /reload)" or "")
   end
   add("Takeover switches: " .. table.concat(sw, ", "))
+  add("Window switches (Settings > Windows): " .. table.concat(wsw, ", "))
   if #off > 0 then add("Known, not loaded: " .. table.concat(off, ", ")) end
   for _, e in ipairs(extras) do
     add(e[1] .. " details:")
@@ -645,13 +715,15 @@ function AC.DetectedText()
   return text
 end
 -- Switches that differ from what this session runs (they apply after a reload).
-function AC.PendingText()
+function AC.PendingText(windows) -- windows: the Windows page lists every switch, the Compatibility page only its own
   local waiting = {}
   for _, grp in ipairs(AC.GROUPS) do
-    if AC.Choice(grp.id) ~= AC.Enabled(grp.id) then waiting[#waiting + 1] = grp.label end
+    if (windows or not grp.window) and AC.Choice(grp.id) ~= AC.Enabled(grp.id) then waiting[#waiting + 1] = grp.label end
   end
   if #waiting == 0 then return "Changes to these switches apply after a reload." end
-  return "Waiting for a reload: " .. table.concat(waiting, ", ") .. "."
+  local text = "Waiting for a reload: " .. table.concat(waiting, ", ") .. "."
+  if windows and #text > 84 then text = "Waiting for a reload: " .. #waiting .. " switches changed." end -- the Windows page has one line for it
+  return text
 end
 
 ---------------------------------------------------------------- wiring
@@ -660,7 +732,7 @@ AFUI.RegisterModule("AddonCompat", {
     for _, grp in ipairs(AC.GROUPS) do AC.Enabled(grp.id) end -- every switch is decided now, from what is loaded at login, and kept for the session
     AC.Scan("login")
     AC.Notice()
-    if _G.CharacterFrame and CharacterFrame.HookScript then
+    if _G.CharacterFrame and CharacterFrame.HookScript and AC.Enabled("character") then
       CharacterFrame:HookScript("OnShow", AC.Apply)
       CharacterFrame:HookScript("OnSizeChanged", AC.Apply) -- collapse / expand
     end
