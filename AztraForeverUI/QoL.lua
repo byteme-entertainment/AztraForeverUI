@@ -10,7 +10,7 @@ Q.DEFAULTS = {
   sellJunkButton = true, autoSellJunk = false, bagNewGlow = true, bagKeyring = true,
   barGlow = true,
   bagQuestMarker = true, bagUpgradeArrow = true, bagAutoOpen = true, bagGroupCategory = false, bagDontSell = true,
-  bagGrayJunk = true, bagRedUnusable = true,
+  bagGrayJunk = true, bagRedUnusable = true, bankCombine = true,
 }
 
 if not AFUI.GetSetting then

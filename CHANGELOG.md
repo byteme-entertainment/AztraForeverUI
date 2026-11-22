@@ -1,6 +1,10 @@
 # Changelog
 
-## 0.92 Beta (latest)
+## 0.93 Beta (latest)
+
+- **Bank in one window.** The bank now opens as a single window in the combined-bags style (28 main slots, then your bank bags, bag slot row and money), instead of Blizzard's separate bank bag windows. It has a search bar and a **Clean Up** button that merges partial stacks and sorts the bank. Setting **Combine bank bags** (default on) brings the old look back when off. The bags' own Clean Up also merges partial stacks now.
+
+## 0.92 Beta
 
 - **Outfitter compatibility.** Outfitter's panel, button and tabs now sit in front of the character window and beside its mode tabs (they used to be drawn behind them), and are re-placed when the window opens, collapses or the scale changes. `/afui compat` prints the state of Outfitter's frames (and other known addons) so problems can be reported.
 

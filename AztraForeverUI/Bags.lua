@@ -479,7 +479,32 @@ local function itemKey(bag, slot)
   local _, count = GetContainerItemInfo(bag, slot)
   local family = _G.GetItemFamily and GetItemFamily(link) or 0
   local group = on("bagGroupCategory") and Bags.Category(itype, Bags.QuestInfo(bag, slot, itype)) or nil
-  return Sort.Key(itype, quality, name or link, count, group), link, type(family) == "number" and family or 0
+  return Sort.Key(itype, quality, name or link, count, group), link, type(family) == "number" and family or 0, count or 1, select(8, GetItemInfo(link))
+end
+
+-- Partial stacks of one item that fit into each other: { { from, to }, ... } (positions; the smaller stack is dropped on the bigger). items[i] = { id, count, max }.
+-- Only a merge that empties the source is planned (the client's overflow rule is not relied on). Pure.
+function Sort.Merges(items)
+  local by, ids, out = {}, {}, {}
+  for i, it in ipairs(items) do
+    if it.id and it.max and it.max > 1 and (it.count or 1) < it.max then
+      if not by[it.id] then by[it.id] = {}; ids[#ids + 1] = it.id end
+      table.insert(by[it.id], { i = i, n = it.count or 1, max = it.max })
+    end
+  end
+  table.sort(ids)
+  for _, id in ipairs(ids) do
+    local list = by[id]
+    table.sort(list, function(a, b) if a.n ~= b.n then return a.n > b.n end return a.i < b.i end)
+    for k = #list, 2, -1 do -- smallest first, into the first bigger stack with room
+      for d = 1, k - 1 do
+        if list[d].n + list[k].n <= list[d].max then
+          out[#out + 1] = { list[k].i, list[d].i }; list[d].n = list[d].n + list[k].n; break
+        end
+      end
+    end
+  end
+  return out
 end
 
 -- Every slot of the carried bags in order, with the bag family it sits in: { bag, slot, family }.
@@ -492,49 +517,80 @@ function Sort.Slots()
   return out
 end
 
+local function snapshot(pos)
+  local items, links, families = {}, {}, {}
+  for i, p in ipairs(pos) do
+    local key, link, family, count, max = itemKey(p[1], p[2])
+    items[i] = { key = key, family = family, id = link and tonumber(string.match(link, "item:(%d+)")), count = count, max = max }
+    links[i] = link or false; families[i] = p[3]
+  end
+  return items, links, families
+end
+
 local sorter = CreateFrame("Frame")
 local run
 local function stop(why) run = nil; sorter:SetScript("OnUpdate", nil); Sort.last = why; if Bags.UpdateAll then Bags.UpdateAll() end end
 local function locked(p) local _, _, l = GetContainerItemInfo(p[1], p[2]); return l end
+-- Picks the item of a up and drops it on b (a swap or a merge); false when the hand still holds something afterwards (the run is aborted).
+local function move(a, b)
+  PickupContainerItem(a[1], a[2]); PickupContainerItem(b[1], b[2]) -- the item of a lands in b; b's item (if any) is now in the hand
+  if CursorHasItem and CursorHasItem() then PickupContainerItem(a[1], a[2]) end -- ... and goes to a
+  if CursorHasItem and CursorHasItem() then if ClearCursor then ClearCursor() end; return false end
+  return true
+end
 local function step(_, dt)
   if not run then return stop("idle") end
   run.t = run.t + dt
   if run.t > run.limit or InCombatLockdown() or (CursorHasItem and CursorHasItem()) then return stop("aborted") end
+  if run.alive and not run.alive() then return stop("closed") end -- the bank closed: its slots cannot be moved any more
   run.wait = run.wait - dt
   if run.wait > 0 then return end
+  local mv = run.moves[run.m]
+  if mv then -- phase 1: merge partial stacks
+    local a, b = run.pos[mv[1]], run.pos[mv[2]]
+    if locked(a) or locked(b) then return end
+    if (GetContainerItemLink(a[1], a[2]) or false) ~= run.links[mv[1]] or (GetContainerItemLink(b[1], b[2]) or false) ~= run.links[mv[2]] then return stop("changed") end
+    if not move(a, b) then return stop("aborted") end
+    run.links[mv[1]] = false
+    run.m = run.m + 1; run.wait = 0.1
+    return
+  end
+  if not run.swaps then -- phase 2: once the merges have settled (no slot locked), plan the order from what is really there
+    for _, p in ipairs(run.pos) do if locked(p) then return end end
+    local items, links, families = snapshot(run.pos)
+    run.swaps, run.links, run.n = Sort.Plan(items, families), links, 1
+    run.limit = run.t + 10 + #run.swaps
+  end
   local sw = run.swaps[run.n]
   if not sw then return stop("done") end
   local a, b = run.pos[sw[1]], run.pos[sw[2]]
   if locked(a) or locked(b) then return end
   -- the bags changed under us (an item moved or was looted): the plan is stale
   if (GetContainerItemLink(a[1], a[2]) or false) ~= run.links[sw[1]] or (GetContainerItemLink(b[1], b[2]) or false) ~= run.links[sw[2]] then return stop("changed") end
-  PickupContainerItem(a[1], a[2]); PickupContainerItem(b[1], b[2]) -- the item of a lands in b; b's item (if any) is now in the hand
-  if CursorHasItem and CursorHasItem() then PickupContainerItem(a[1], a[2]) end -- ... and goes to a
-  if CursorHasItem and CursorHasItem() then if ClearCursor then ClearCursor() end; return stop("aborted") end
+  if not move(a, b) then return stop("aborted") end
   run.links[sw[1]], run.links[sw[2]] = run.links[sw[2]], run.links[sw[1]]
   run.n = run.n + 1; run.wait = 0.1
 end
 
--- Cleans up the carried bags. Returns true when a run started; false with Sort.last = "combat" / "cursor" / "nothing" / "busy" otherwise.
-function Sort.Start()
+-- Cleans up the carried bags, or `slots` ({ bag, slot, family } in order, e.g. the bank's) when given; alive() (optional) must stay true or the run stops.
+-- Returns true when a run started; false with Sort.last = "combat" / "cursor" / "nothing" / "busy" otherwise.
+function Sort.Start(slots, alive)
   if run then Sort.last = "busy"; return false end
   if InCombatLockdown() then Sort.last = "combat"; return false end
   if CursorHasItem and CursorHasItem() then Sort.last = "cursor"; return false end
   if not (PickupContainerItem and GetContainerItemLink and GetItemInfo) then return false end
-  local pos = Sort.Slots()
-  local items, links, families = {}, {}, {}
-  for i, p in ipairs(pos) do
-    local key, link, family = itemKey(p[1], p[2])
-    items[i] = { key = key, family = family }; links[i] = link or false; families[i] = p[3]
-  end
-  local swaps = Sort.Plan(items, families)
-  if #swaps == 0 then Sort.last = "nothing"; return false end
-  run = { pos = pos, links = links, swaps = swaps, n = 1, t = 0, wait = 0, limit = 10 + #swaps }
+  local pos = slots or Sort.Slots()
+  local items, links, families = snapshot(pos)
+  local moves = Sort.Merges(items)
+  local swaps = #moves == 0 and Sort.Plan(items, families) or nil -- with merges first, the order is planned after them
+  if #moves == 0 and #swaps == 0 then Sort.last = "nothing"; return false end
+  run = { pos = pos, links = links, moves = moves, m = 1, swaps = swaps, n = 1, t = 0, wait = 0, limit = 10 + #pos, alive = alive }
   sorter:SetScript("OnUpdate", step)
   return true
 end
-function Sort.Stop(why) if run then stop(why or "aborted") end end
-function Sort.Running() return run ~= nil end
+-- scope "bags" / "bank": only stops a run of that kind (closing the bags must not end a bank clean up, nor the other way round)
+function Sort.Stop(why, scope) if run and (not scope or (scope == "bank") == (run.alive ~= nil)) then stop(why or "aborted") end end
+function Sort.Running(scope) return run ~= nil and (not scope or (scope == "bank") == (run.alive ~= nil)) end
 Sort.Step = step
 AFUI.On("PLAYER_REGEN_DISABLED", function() Sort.Stop("aborted") end)
 
@@ -751,7 +807,7 @@ end
 function New.Read(bank)
   local s = { slots = {}, totals = {}, bank = bank and true or false }
   local bags = { 0, 1, 2, 3, 4 }
-  if bank then bags[#bags + 1] = -1 end
+  if bank then bags[#bags + 1] = -1; for id = MAX_BAG + 1, MAX_BAG + (_G.NUM_BANKBAGSLOTS or 7) do bags[#bags + 1] = id end end
   for _, bag in ipairs(bags) do
     for slot = 1, numSlots(bag) do
       local link = GetContainerItemLink and GetContainerItemLink(bag, slot)
@@ -1139,6 +1195,9 @@ local function newButton(bag, slot)
 end
 
 local function button(bag, slot) return buttons[bag] and buttons[bag][slot] or newButton(bag, slot) end
+-- For the bank window (Bank.lua): its bank bag slots (ids 5..11) are the same buttons as the bags' own, parented to the bank frame there.
+Bags.Holder, Bags.Button = holder, button
+function Bags.BagButtons(bag) return buttons[bag] or {} end
 
 local function windowKind(key)
   if key == "combined" then return "combined" end
@@ -1399,15 +1458,18 @@ local function syncBarButtons()
 end
 
 -- The Clean Up button: one click sorts (out of combat, no item on the cursor), a click during a run stops it.
-local CLEAN_SAY = { combat = "You can't clean up your bags in combat.", cursor = "Put the item on your cursor down first.", nothing = "Your bags are already sorted." }
-function Bags.CleanUp()
+local CLEAN_SAY = { combat = "You can't clean up your bags in combat.", cursor = "Put the item on your cursor down first.", nothing = "Nothing to clean up in your bags." }
+-- slots / alive: the bank's list and "the bank is still open" (Bank.lua); nothing = the carried bags.
+function Bags.CleanUp(slots, alive)
   if Sort.Running() then Sort.Stop("aborted"); return end
-  if not Sort.Start() and CLEAN_SAY[Sort.last] and AFUI.Print then AFUI.Print(CLEAN_SAY[Sort.last]) end
+  local started = Sort.Start(slots, alive)
+  if not started and CLEAN_SAY[Sort.last] and AFUI.Print then AFUI.Print((string.gsub(CLEAN_SAY[Sort.last], "bags", alive and "bank" or "bags"))) end
+  Bags.UpdateAll() -- the bank's "Sorting..." mark
 end
 
 function Bags.Refresh()
   if not state then return end
-  if not state:AnyBag() then Sort.Stop("closed") end -- the bags closed: a clean up in progress stops
+  if not state:AnyBag() then Sort.Stop("closed", "bags") end -- the bags closed: a clean up in progress stops
   if InCombatLockdown() then -- item buttons are secure: no layout / SetPoint in combat. The windows are plain frames: Show / Hide them, with the last layout
     local open = {}
     for _, key in ipairs(state:Windows()) do open[key] = true end
@@ -1463,6 +1525,11 @@ function Bags.SetSearch(text)
     if win.search and win.search:GetText() ~= Bags.searchText then win.search:SetText(Bags.searchText) end
     setShown(win.search.hint, Bags.searchText == "")
   end
+  local bs = Bags.Bank and Bags.Bank.search -- the bank window's own box shows the same text
+  if bs then
+    if bs:GetText() ~= Bags.searchText then bs:SetText(Bags.searchText) end
+    setShown(bs.hint, Bags.searchText == "")
+  end
   Bags.UpdateAll()
 end
 
@@ -1493,6 +1560,8 @@ local function makeSearch(win, id)
   e:SetScript("OnEditFocusLost", function(self) setShown(self.hint, self:GetText() == "") end)
   return e
 end
+
+Bags.MakeSearch = makeSearch
 
 local function makeMoney(win, id)
   local box = CreateFrame("Frame", "AFUI_BagMoney" .. id, win)
@@ -1680,16 +1749,22 @@ function Bags.Setup()
   override("ToggleBackpack", act(function() state:Toggle(0) end))
   override("OpenBackpack", act(function() state:Open(0) end))
   override("CloseBackpack", act(function() state:Close(0) end))
+  -- bank bag ids 5..11 while the bank shows them in its own combined window: Blizzard's separate windows are never opened (Bank.Owns)
+  local function bankBag(id) return Bags.Bank and Bags.Bank.Owns and Bags.Bank.Owns(id) end
   override("ToggleBag", function(id)
+    if bankBag(id) then return end
     if mine(id) then state:Toggle(id); Bags.Refresh() else orig.ToggleBag(id) end
   end)
   override("OpenBag", function(id)
+    if bankBag(id) then return end
     if mine(id) then state:Open(id); Bags.Refresh() else orig.OpenBag(id) end
   end)
   override("CloseBag", function(id)
+    if bankBag(id) then return end
     if mine(id) then state:Close(id); Bags.Refresh() else orig.CloseBag(id) end
   end)
   override("IsBagOpen", function(id)
+    if bankBag(id) then return Bags.Bank.Shown() and id or nil end
     if mine(id) then return state:IsOpen(id) and id or nil end
     return orig.IsBagOpen(id)
   end)
@@ -1710,7 +1785,12 @@ function Bags.Setup()
   -- safety net: if something still shows one of Blizzard's own held-bag frames, hide it
   for i = 1, 13 do
     local f = _G["ContainerFrame" .. i]
-    if f and f.HookScript then f:HookScript("OnShow", function(self) local id = self:GetID(); if id and id <= MAX_BAG and id >= KEYRING then self:Hide() end end) end
+    if f and f.HookScript then
+      f:HookScript("OnShow", function(self)
+        local id = self:GetID()
+        if id and ((id <= MAX_BAG and id >= KEYRING) or (bankBag(id) and not InCombatLockdown())) then self:Hide() end
+      end)
+    end
   end
   hookBagButtonHover()
   Bags.SetupItemLevel()
@@ -1761,7 +1841,7 @@ end
 AFUI.On("BAG_UPDATE", Bags.ScheduleScan)
 AFUI.On("PLAYER_ENTERING_WORLD", function() New.quietUntil = GetTime() + 3; New.prev = nil; Bags.ScheduleScan() end)
 AFUI.On("BANKFRAME_OPENED", function() New.quietUntil = GetTime() + 1; Bags.ScheduleScan() end)
-AFUI.On("BANKFRAME_CLOSED", function() New.ClearBag(-1); Bags.ScheduleScan() end)
+AFUI.On("BANKFRAME_CLOSED", function() New.ClearBag(-1); for id = MAX_BAG + 1, MAX_BAG + (_G.NUM_BANKBAGSLOTS or 7) do New.ClearBag(id) end; Sort.Stop("closed", "bank"); Bags.ScheduleScan() end)
 
 -- BAG_UPDATE fires in bursts (one per bag slot touched): mark dirty and lay out once on the next frame, then the OnUpdate removes itself.
 local pending = CreateFrame("Frame")
