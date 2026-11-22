@@ -42,6 +42,7 @@ end
 -- Out of combat only. A button hidden by its bar's Icons setting (statehidden) gets no key: it would fire an unseen action.
 local function Update()
   ClearOverrideBindings(owner)
+  if not AFUI.ModuleEnabled("actionbars") then return end -- another addon owns the bars and their keys (AddonCompat.lua)
   for _, b in ipairs(buttons) do
     if not b:GetAttribute("statehidden") then
       for _, key in ipairs({ GetBindingKey(b.afuiBinding) }) do

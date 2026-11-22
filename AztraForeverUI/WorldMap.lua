@@ -477,6 +477,7 @@ end
 
 local function setup()
   if AFUI.WorldMapWindow or not WorldMapFrame then return end
+  if not AFUI.ModuleEnabled("map") then return end -- Mapster / Cartographer or the player's choice: the client's map stays (AddonCompat.lua)
   local wm = WorldMapFrame
   local function child(k) local v = wm[k]; return type(v) == "table" and v or nil end -- parentKey children (2.5.3 only)
   local canvas, border, scroll = WorldMapDetailFrame, nil, nil -- 2.4.3 has the named detail frame

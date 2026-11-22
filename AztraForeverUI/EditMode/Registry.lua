@@ -317,9 +317,12 @@ end
 ---------------------------------------------------------------- wiring of the existing modules
 -- Rows of the settings window as in the real one (Stance Bar: Orientation, # of Rows, Icon Size, Icon Padding); the right bars are
 -- vertical in Forever's presets (one column).
+-- A takeover group the player (or a clashing addon) switched off has nothing to move in Edit Mode: its systems are not registered (AddonCompat.lua).
+local function ours(group) return not AFUI.ModuleEnabled or AFUI.ModuleEnabled(group) end
+
 local function bar(key, label, full, group)
   local b = AFUI.Bars[key]
-  if not b then return end -- possess exists only where the client has the bar
+  if not b or not ours("actionbars") then return end -- possess exists only where the client has the bar
   local schema = { { id = "orientation", type = "dropdown", label = "Orientation", options = { "Horizontal", "Vertical" } },
     { id = "numRows", type = "slider", label = "# of Rows", min = 1, max = 12, step = 1 } }
   if full then schema[#schema + 1] = { id = "numIcons", type = "slider", label = "# of Icons", min = 1, max = 12, step = 1 } end
@@ -372,7 +375,7 @@ function EM.FitUnitSelection(entry, geoKey, base, showPortrait)
 end
 
 local function unit(key, unitKey, label, selection, group)
-  local u = AFUI.Units and AFUI.Units[unitKey]
+  local u = ours("unitframes") and AFUI.Units and AFUI.Units[unitKey]
   if not u then return end
   EM.Register(key, { frame = u.frame, label = label, selection = selection, settingsSchema = PORTRAIT, scaleLabel = "Frame Size", group = group,
     defaults = { showPortrait = u.settings.showPortrait },
@@ -387,20 +390,20 @@ end
 
 local PARTY_STRIDE = 63 -- party frames are 53 high, Forever spaces them 10 apart (unitframe shared/partyframe.lua:150-156)
 local function party()
-  local u1 = AFUI.Units and AFUI.Units.party1
+  local u1 = ours("unitframes") and AFUI.Units and AFUI.Units.party1
   if not u1 then return end
   -- the box spans all four member frames (Forever's party frame is one container)
   -- Forever's order: the raid-style checkbox first; the portrait is ours (old style only), width / height / power bar / pets are the
   -- raid-style ones (Frame Width, Frame Height, Sort By, Use Horizontal Layout, Display Border, then the raid profile's own options). Defaults of a new character: the client's raid profile (CompactParty.lua).
-  local function old(s) return not s.useRaidStyle end
-  local function raid(s) return s.useRaidStyle end
-  local CP = AFUI.CompactParty
+  local CP = ours("party") and AFUI.CompactParty or nil -- raid-style party frames off: no such rows, no CP calls
+  local function old(s) return not (CP and s.useRaidStyle) end
+  local function raid(s) return CP ~= nil and s.useRaidStyle end
   local defaults = { showPortrait = u1.settings.showPortrait }
   for k, v in pairs(CP and CP.DEFAULTS or {}) do defaults[k] = v end
   local scale = copy(SCALE); scale.label = "Frame Size"
   EM.Register("party", { frame = u1.frame, label = "Party Frames", selection = { 0, 0, 0, -3 * PARTY_STRIDE }, group = "party",
     settingsSchema = {
-      { id = "useRaidStyle", type = "checkbox", label = "Use Raid-Style Party Frames", reshape = true },
+      { id = "useRaidStyle", type = "checkbox", label = "Use Raid-Style Party Frames", reshape = true, show = function() return CP ~= nil end },
       { id = "showPortrait", type = "checkbox", label = "Show Portrait", show = old },
       { id = "frameWidth", type = "slider", label = "Frame Width", min = 72, max = 144, step = 2, show = raid },
       { id = "frameHeight", type = "slider", label = "Frame Height", min = 36, max = 72, step = 2, show = raid },
@@ -441,7 +444,7 @@ end
 -- Only the player's bar: the target bar always hangs under the target frame (Forever's AdjustPosition, CastBars.lua), so it
 -- is not an Edit Mode system.
 local function castbar()
-  local b = AFUI.CastBars and AFUI.CastBars.player
+  local b = ours("unitframes") and AFUI.CastBars and AFUI.CastBars.player
   if not b then return end
   EM.Register("castbar_player", { frame = b.frame, label = "Cast Bar", group = "castbar", scaleLabel = "Bar Size", defaults = { scale = b.settings.scale, lockToPlayerFrame = b.settings.lockToPlayerFrame },
     settingsSchema = { { id = "lockToPlayerFrame", type = "checkbox", label = "Lock to Player Frame" } },
@@ -484,14 +487,14 @@ function EM.RegisterAll()
   -- otherwise). Each moves on its own; the second one's width follows the first until it has a Width of its own.
   for _, d in ipairs({ { "statusbar", AFUI.StatusBar, "Status Bar 1" }, { "statusbar2", AFUI.StatusBar2, "Status Bar 2", "statusbar2" } }) do
     local sbar = d[2]
-    if sbar then
+    if sbar and ours("actionbars") then
       EM.Register(d[1], { frame = sbar.frame, label = d[3], noScale = true, defaults = { width = 1 }, group = d[4],
         settingsSchema = { { id = "width", type = "slider", label = "Width", min = 0.5, max = 1, step = 0.05, percent = true } },
         apply = function(entry) EM.Place(entry); if sbar.Resize then sbar.Resize() end end })
     end
   end
-  plain("micromenu", "Menu", AFUI.MicroMenu) -- the video's name for it
-  if AFUI.HudTooltip then
+  if ours("actionbars") then plain("micromenu", "Menu", AFUI.MicroMenu) end -- the video's name for it
+  if AFUI.HudTooltip and ours("tooltips") then
     EM.Register("hudtooltip", { frame = AFUI.HudTooltip, label = "HUD Tooltip", noScale = true, group = "hudtooltip" })
   end
   if AFUI.BuffAnchor then
@@ -508,7 +511,7 @@ function EM.RegisterAll()
       end })
   end
   local cf = _G.ChatFrame1
-  if cf then -- Forever's Chat Frame: Width 349 / Height 215 in the video, in the bottom left corner
+  if cf and ours("chat") then -- Forever's Chat Frame: Width 349 / Height 215 in the video, in the bottom left corner
     EM.Register("chat", { frame = cf, label = "Chat Frame", noScale = true, defaults = { width = 349, height = 215 },
       settingsSchema = { { id = "width", type = "slider", label = "Width", min = 180, max = 600, step = 1 },
         { id = "height", type = "slider", label = "Height", min = 80, max = 400, step = 1 } },
@@ -519,12 +522,12 @@ function EM.RegisterAll()
         EM.Place(entry)
       end })
   end
-  if AFUI.BagBar then -- Forever's Options > Combine Bags, kept per account by Bags.lua: the checkbox is a view of it
+  if AFUI.BagBar and ours("actionbars") then -- Forever's Options > Combine Bags, kept per account by Bags.lua: the checkbox is a view of it
     local B = AFUI.Bags
     local MODES, MODE_KEYS = AFUI.BAG_BAR_MODES or {}, {}
     for k, label in pairs(MODES) do MODE_KEYS[label] = k end
     local function modeLabel() return MODES[AFUI.BagBarMode and AFUI.BagBarMode() or "full"] or "Full row" end
-    EM.Register("bags", { frame = AFUI.BagBar, label = "Bags", settingsSchema = { { id = "combineBags", type = "checkbox", label = "Combine Bags" },
+    EM.Register("bags", { frame = AFUI.BagBar, label = "Bags", settingsSchema = { { id = "combineBags", type = "checkbox", label = "Combine Bags", show = function() return ours("bags") end },
         { id = "barMode", type = "dropdown", label = "Bag Bar", options = { "Full row", "Single icon", "Hidden" } } },
       defaults = { combineBags = B and B.IsCombined() or false, barMode = "Full row" },
       apply = function(entry)
@@ -545,7 +548,7 @@ function EM.RegisterAll()
       if cur then cur.barMode = modeLabel() end
     end)
   end
-  endcap("endcap_left", "left", "End Cap (Left)"); endcap("endcap_right", "right", "End Cap (Right)")
+  if ours("actionbars") then endcap("endcap_left", "left", "End Cap (Left)"); endcap("endcap_right", "right", "End Cap (Right)") end
   unit("player", "player", "Player Frame", BIG_UNIT); unit("target", "target", "Target Frame", BIG_UNIT, "targetfocus")
   unit("targettarget", "targettarget", "Target of Target", SMALL_UNIT, "targetfocus"); unit("pet_frame", "pet", "Pet Frame", SMALL_UNIT, "petframe")
   party()

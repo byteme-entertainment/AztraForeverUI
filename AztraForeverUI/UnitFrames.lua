@@ -955,10 +955,11 @@ for i = 2, 4 do PLACE["party" .. i] = { "TOPLEFT", "AFUI_Party1Frame", "TOPLEFT"
 local previewing, previewSet
 -- Party frames give way to the raid frames, and to the raid-style party frames (CompactParty.lua) while those are switched on.
 local function applyPartyVisibility()
-  local cp = AFUI.CompactParty
+  local cp = AFUI.ModuleEnabled("party") and AFUI.CompactParty or nil -- raid-style party frames off (AddonCompat.lua): nothing of theirs is drawn or asked
   local compact = cp and cp.IsOn()
   local partyPreview = previewing and (not previewSet or previewSet.party1)
   if cp then cp.preview = partyPreview and true or false; cp.Refresh() end
+  if not AFUI.Units.party1 then return end -- unit frames off: the party frames were never built
   if previewing and not compact and not partyPreview then return end
   local raid = AFUI.RaidSize() > 0
   for i = 1, 4 do
@@ -966,7 +967,7 @@ local function applyPartyVisibility()
     if not f.afGiveWay then -- something showed it again (a group change in combat, a late event): it gives way once more
       f.afGiveWay = true
       f:HookScript("OnShow", function(self)
-        local c = AFUI.CompactParty
+        local c = AFUI.ModuleEnabled("party") and AFUI.CompactParty
         if c and c.IsOn() and not previewing then self:SetAlpha(0); AFUI.RunOutOfCombat(applyPartyVisibility) end
       end)
     end

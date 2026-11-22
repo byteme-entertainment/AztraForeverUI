@@ -42,6 +42,7 @@ local BARS = {
 
 -- Shared with the pet/stance/possess bars (BarExtras.lua), which reuse Blizzard buttons of the same template family.
 function AFUI.SkinButton(b, size)
+  if AFUI.IsExternallySkinned and AFUI.IsExternallySkinned(b) then return end -- Masque / ButtonFacade skinned it: not over again (AddonCompat.lua)
   local name = b:GetName()
   b:SetWidth(size); b:SetHeight(size)
   -- FrameXML keeps re-setting the normal texture's file; hide it and draw Forever's frame on top.
@@ -189,7 +190,18 @@ local function KillBlizzard()
   for _, name in ipairs(BLIZZARD) do AFUI.Kill(_G[name]) end
   for i = 1, 12 do AFUI.Kill(_G["ActionButton" .. i]) end
 end
-AFUI.RegisterModule("ActionBars", { OnLogin = function()
+-- "Action bars" switched off (the player's choice, or Bartender4 / Dominos / ElvUI is loaded): the bars and the bottom HUD pieces of ours exist (their frames are made when the files
+-- load) but must not show or take keys: they go under the hidden holder, Blizzard's own bars are not killed, Bindings.lua sets no override keys. Nothing is shown in Edit Mode (Registry.lua).
+local function yield()
+  AFUI.RunOutOfCombat(function()
+    local function away(f) if f then f:Hide(); f:SetParent(AFUI.Hidden) end end
+    for _, bar in pairs(AFUI.Bars) do away(bar.frame) end
+    local sb, sb2, caps = AFUI.StatusBar, AFUI.StatusBar2, AFUI.EndCaps
+    away(sb and sb.frame); away(sb2 and sb2.frame); away(AFUI.MicroMenu); away(AFUI.BagBar)
+    away(caps and caps.leftFrame); away(caps and caps.rightFrame)
+  end)
+end
+AFUI.RegisterModule("ActionBars", { OnYield = yield, OnLogin = function()
   AFUI.RunOutOfCombat(KillBlizzard)
   if type(_G.MultiActionBar_Update) == "function" then hooksecurefunc("MultiActionBar_Update", AFUI.UpdateBarToggles) end
   if type(_G.SetActionBarToggles) == "function" then

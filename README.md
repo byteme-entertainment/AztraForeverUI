@@ -1,6 +1,6 @@
 # Aztra's Forever UI
 
-> **Version 0.93 Beta.** This addon was specifically designed for **Crusader-Storm**. It is a public beta: please report anything odd. [Download the latest version](https://github.com/byteme-entertainment/AztraForeverUI/releases/latest) · [Changelog](CHANGELOG.md)
+> **Version 0.94 Beta.** This addon was specifically designed for **Crusader-Storm**. It is a public beta: please report anything odd. [Download the latest version](https://github.com/byteme-entertainment/AztraForeverUI/releases/latest) · [Changelog](CHANGELOG.md)
 
 **Make World of Warcraft: The Burning Crusade Classic look and play like Blizzard's *WoW: Forever UI*.**
 
@@ -97,6 +97,37 @@ More detail: [INSTALL.md](INSTALL.md).
 - Another addon that replaces the same frames (action bars, bags, unit frames) will clash.
 - Not every Forever window exists in the Classic client, so some Forever features have nothing to attach to. Features of the modern game that the 2.5.3 client cannot do are not faked.
 - The addon is large (about 80 MB), mostly textures.
+
+## Compatibility
+
+Aztra's Forever UI replaces a lot of the interface, so it knows about the addons that draw the same things. Nothing is ever disabled behind your back, and nothing of another addon's is touched.
+
+**Clashes: you choose, and a fresh install never fights.** Under **Settings > Compatibility** there is one switch per part that other addons also draw. A switch tells Aztra's Forever UI whether to draw that part at all:
+
+| Switch | Aztra's Forever UI draws | Gives way by default to |
+| --- | --- | --- |
+| Bags & Bank | the combined bags and bank windows | Bagnon, ArkInventory, AdiBags, Baganator, Combuctor, OneBag3, ElvUI, Tukui, LUI |
+| Action bars | the bars, XP bar, menu and bag buttons, end caps, bar keys | Bartender4, Dominos, Neuron, ElvUI, Tukui, LUI |
+| Unit frames | player, target, pet and party member frames, cast bars | ShadowedUnitFrames, PitBull4, ZPerl, Luna, ElvUI, Tukui, LUI |
+| Party frames | the raid-style party frames | Grid, Grid2, VuhDo, HealBot, ShadowedUnitFrames, PitBull4, ZPerl, Luna, ElvUI, Tukui, LUI |
+| Chat | the chat window skin and chat extras | Prat, Chatter, Glass, ElvUI, Tukui, LUI |
+| Nameplates | plates over units and the debuff row | TidyPlates, Plater, Kui Nameplates, ElvUI, Tukui |
+| Map & quest log | the world map window and the L key | Mapster, Cartographer |
+| Tooltips | the tooltip skin and the lines it adds | TipTac, ElvUI, Tukui, LUI |
+
+Every switch is **on** by default, **except** that a part starts **off** while an addon from its row is loaded and you have not chosen yet. At login you get one chat line saying which addon is loaded and what both of you draw, once per character (the page has a button to show it again). A change shows after `/reload`. Info bars (Titan Panel, FuBar) and BagBrother (data only) are listed and never clash.
+
+**Works together.** These need no setting; `/afui compat` shows what was done:
+
+- **ItemRack:** its minimap button stays above our minimap ring.
+- **Pawn:** its tooltip lines keep their place; our Item Level and ID lines come after them and never twice.
+- **Questie:** Questie's frames are never touched; our tracker steps aside while Questie's tracker is on (`/afui questie` explains the rest).
+- **Outfitter:** its panel is moved clear of the character window's tabs.
+- **OmniCC:** it draws the cooldown numbers on our buttons and ours stay off, so nothing shows twice.
+- **Masque / ButtonFacade:** our buttons keep the standard parts (Icon, Cooldown, Count, HotKey, Name, Border, NormalTexture, FloatingBG) and a button they skinned is not skinned again by us.
+- **DBM, BigWigs, Details, Recount, Skada, WeakAuras:** they anchor to frames we keep in place; nothing is changed, and the report lists what they will find.
+
+**Reporting a problem.** Type `/afui compat` and paste the lines it prints into your report. It lists each known addon that is loaded (name, version, state, what we did), the state of the switches and the frames involved. Say what you expected and what you saw.
 
 ## Credits
 

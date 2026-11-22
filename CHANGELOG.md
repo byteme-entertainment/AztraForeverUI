@@ -1,6 +1,14 @@
 # Changelog
 
-## 0.93 Beta (latest)
+## 0.94 Beta (latest)
+
+- **Compatibility page.** Settings > Compatibility has one switch per part (Bags & Bank, Action bars, Unit frames, Party frames, Chat, Nameplates, Map & quest log, Tooltips) saying whether Aztra's Forever UI draws it. A part gives way by default to a known addon that draws the same thing (Bagnon, ElvUI, Bartender4, Grid2, Prat, TipTac ...), with one chat notice per character. Changes apply after /reload. Nothing is disabled behind your back.
+- **Other addons keep their anchors.** Blizzard frames that other addons anchor to (PlayerFrame, TargetFrame, Minimap, ActionButton1, ChatFrame1 and many more) stay alive with the size and place of our frames. `/afui anchors` reports any mismatch.
+- **Integrations:** ItemRack (minimap button above our ring), Pawn (tooltip lines in order, no duplicates), Questie, OmniCC (numbers not doubled), Masque / ButtonFacade; DBM, BigWigs, Details, Recount, Skada and WeakAuras are report-only.
+- `/afui compat` prints a report you can paste into a bug report; `/afui compat notice` shows the clash notice again.
+- Settings side tabs now squeeze to stay inside the window.
+
+## 0.93 Beta
 
 - **Bank in one window.** The bank now opens as a single window in the combined-bags style (28 main slots, then your bank bags, bag slot row and money), instead of Blizzard's separate bank bag windows. It has a search bar and a **Clean Up** button that merges partial stacks and sorts the bank. Setting **Combine bank bags** (default on) brings the old look back when off. The bags' own Clean Up also merges partial stacks now.
 

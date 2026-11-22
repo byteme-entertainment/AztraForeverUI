@@ -10,7 +10,10 @@ FX.buttons = {} -- every attached button (action, pet, stance, possess)
 local FONT = _G.STANDARD_TEXT_FONT or "Fonts\\FRIZQT__.TTF"
 local GCD_MAX = 2 -- the global cooldown is 1.5 s at most: a cooldown of 2 s or less gets no number
 
-local function on(key) return AFUI.GetSetting(key) ~= false end
+local function on(key)
+  if key == "cooldownNumbers" and FX.external then return false end -- another addon (OmniCC) draws the numbers: ours stay off, nothing shows twice
+  return AFUI.GetSetting(key) ~= false
+end
 
 ---------------------------------------------------------------- pure rules (specs)
 -- Remaining seconds -> text and colour. White; yellow for the last 5 s; whole seconds under a minute, then 3m, 2h, 1d (rounded up).
@@ -274,6 +277,9 @@ function FX.Refresh()
     FX.SyncGlow(b)
   end
 end
+
+-- AddonCompat.lua (OmniCC): another addon draws the cooldown numbers on our buttons; ours stop, and come back when this is turned off.
+function FX.SetExternalNumbers(v) FX.external = v and true or false; FX.Refresh() end
 
 ---------------------------------------------------------------- hooks
 local function hookCooldown(fname)

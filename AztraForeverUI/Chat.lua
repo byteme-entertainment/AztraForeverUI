@@ -4,6 +4,10 @@
 -- and 2.4.3 lacks are added under Blizzard's names. Docking, dragging, scrolling and the combat log stay Blizzard's.
 local IS_243 = AFUI.IS_243
 
+-- "Chat" switched off (the player's choice, or Prat / Chatter / Glass / ElvUI is loaded; AddonCompat.lua): this file skins the chat windows the moment it loads, so the
+-- whole file is skipped. ChatQoL.lua, which needs its exports, is switched off with it.
+if not AFUI.ModuleEnabled("chat") then return end
+
 -- Version differences. 2.4.3: FrameXML FloatingChatFrame.xml/ChatFrame.xml (MOUZU/Blizzard-WoW-Interface 2.4.3);
 -- 2.5.3: the same files at Gethe/wow-ui-source tag 2.5.3.
 local V = IS_243 and {

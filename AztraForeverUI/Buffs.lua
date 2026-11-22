@@ -42,6 +42,7 @@ box:SetWidth(WRAP.HELPFUL * PITCH + 14); box:SetHeight(3 * ROW + GAP + 2 * ROW)
 local holder = CreateFrame("Frame", "AFUI_Buffs", box)
 holder:SetAllPoints(box)
 local pool = { HELPFUL = {}, HARMFUL = {} } -- buttons of each block, reused
+AFUI.BuffPool = pool -- read by AnchorCompat.lua: the stand-ins of BuffButtonN / DebuffButtonN / TempEnchantN follow these
 local rowsOf = { HELPFUL = 0, HARMFUL = 0 }
 local dirty = true
 

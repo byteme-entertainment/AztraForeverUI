@@ -96,6 +96,10 @@ function AFUI.SetupBagSlots()
   update()
 end
 
+-- Frames (by name) that must stay above our ring wherever they were parented; addons add theirs (AddonCompat.lua: ItemRack) before the next AFUI.RaiseMinimapAddons().
+AFUI.MinimapRaiseNames = { "MiniMapTracking", "MiniMapTrackingFrame", "MiniMapMailFrame", "MiniMapBattlefieldFrame", "MiniMapMeetingStoneFrame",
+  "MiniMapLFGFrame", "GameTimeFrame", "OutfitterMinimapButton", "AFUI_MinimapHeader", "AFUI_MinimapClock", "AFUI_MinimapZoomIn", "AFUI_MinimapZoomOut" }
+
 function AFUI.SetupMinimap()
   local mf = CreateFrame("Frame", "AFUI_MinimapFrame", UIParent)
   mf:SetWidth(CLUSTER_W); mf:SetHeight(CLUSTER_H)
@@ -153,10 +157,7 @@ function AFUI.SetupMinimap()
     return rel == Minimap
   end
   local function raise()
-    for _, n in ipairs({ "MiniMapTracking", "MiniMapTrackingFrame", "MiniMapMailFrame", "MiniMapBattlefieldFrame", "MiniMapMeetingStoneFrame",
-      "MiniMapLFGFrame", "GameTimeFrame", "OutfitterMinimapButton", "AFUI_MinimapHeader", "AFUI_MinimapClock", "AFUI_MinimapZoomIn", "AFUI_MinimapZoomOut" }) do
-      lift(_G[n])
-    end
+    for _, n in ipairs(AFUI.MinimapRaiseNames) do lift(_G[n]) end
     for _, host in ipairs({ Minimap, MinimapCluster, mf }) do
       for _, c in ipairs(host and host.GetChildren and { host:GetChildren() } or {}) do lift(c) end
     end

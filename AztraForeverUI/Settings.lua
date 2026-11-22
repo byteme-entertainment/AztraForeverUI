@@ -10,7 +10,7 @@
 --     AFUI.Settings.Register{ category = "chat", key = "chatFoo", type = "check" | "dropdown" | "slider" | "button" | "text", label = "...", tooltip = "...", default = true,
 --       values = { "a", { "b", "Shown label" } } (dropdown), min = 0, max = 1, step = 0.1, format = "%.1f" (slider), onClick = fn (button), text = "..." | fn, lines = n (text),
 --       get = fn / set = fn (a value that lives elsewhere), requires = fn -> bool (visible when it says so, instead of the provided rule) }
---   and react to a change with AFUI.OnSettingChanged("chatFoo", function(value) ... end). Categories: general, profiles, actionbars, chat, tooltips, nameplates, tracker, about.
+--   and react to a change with AFUI.OnSettingChanged("chatFoo", function(value) ... end). Categories: general, profiles, actionbars, chat, tooltips, nameplates, tracker, compat, about.
 AFUI = AFUI or {}
 local S = {}
 AFUI.Settings = S
@@ -28,6 +28,7 @@ S.CATEGORIES = {
   { key = "tooltips", label = "Tooltips & Bags", icon = "INV_Misc_Gem_01", desc = "Tooltips, vendor helpers and the details on bag and gear slots." },
   { key = "nameplates", label = "Nameplates", icon = "Ability_Marksmanship", desc = "The plates over units in the world." },
   { key = "tracker", label = "Tracker & Map", icon = "INV_Misc_Map_01", desc = "Quests on the tracker and on the map." },
+  { key = "compat", label = "Compatibility", icon = "INV_Misc_Spyglass_03", desc = "Other addons that draw the same things, and what Aztra's Forever UI does about them." },
   { key = "about", label = "About", icon = "INV_Misc_Book_09", desc = "What this addon is and how to reach it." },
 }
 S.current = "general"
@@ -135,7 +136,9 @@ function S.ResetCategory(category)
   local n = 0
   for _, o in ipairs(S.Entries(category)) do
     if o.type == "check" or o.type == "dropdown" or o.type == "slider" then
-      if o.default ~= nil and S.Value(o) ~= o.default then S.Set(o, o.default); n = n + 1 end
+      local d = o.default
+      if o.resetTo then local ok, v = pcall(o.resetTo); if ok and v ~= nil then d = v end end -- a default that depends on the other addons loaded (Compatibility)
+      if d ~= nil and S.Value(o) ~= d then S.Set(o, d); n = n + 1 end
     end
   end
   return n
@@ -296,6 +299,30 @@ def { category = "tracker", key = "mapQuestPins", label = "Tracked quests on the
 def { category = "tracker", key = "mapZoomButtons", label = "Always show zoom buttons", default = false,
   tooltip = "Keeps the + and - buttons beside the minimap visible. Off: they appear only while the mouse is over the minimap." }
 
+-- Compatibility (AddonCompat.lua): which parts of the screen Aztra's Forever UI draws when another addon draws them too. Read when the game starts: a change shows after a reload.
+local AC = AFUI.AddonCompat
+if AC then
+  def { category = "compat", type = "text", id = "compatWhat", lines = 3,
+    text = "Some addons draw the same things as this one: bags, action bars, unit frames, chat, nameplates, the map. Tick what Aztra's Forever UI should draw; a part you leave off is left to the other addon. Until you choose, a part gives way to a loaded addon that draws it." }
+  def { category = "compat", type = "text", id = "compatDetected", lines = 2, text = function() return AC.DetectedText() end }
+  def { category = "compat", type = "text", id = "compatUse", lines = 1, text = "|cffffd100Use Aztra's Forever UI for:|r" }
+  for _, grp in ipairs(AC.GROUPS) do
+    def { category = "compat", key = grp.key, label = grp.label, default = true, requires = function() return true end,
+      tooltip = grp.tip .. " Off: Aztra's Forever UI does not draw this and leaves it to the other addon (or the game). On by default, off by default while an addon that draws the same thing is loaded and you have not chosen. A change shows after a reload.",
+      get = function() return AC.Choice(grp.id) end, set = function(v) AC.SetChoice(grp.id, v) end, resetTo = function() return AC.Default(grp.id) end }
+  end
+  def { category = "compat", type = "text", id = "compatPending", lines = 1, text = function() return AC.PendingText() end }
+  def { category = "compat", type = "button", id = "compatReload", label = "Reload the UI to apply",
+    tooltip = "Reloads the interface now (the same as /reload): the switches above are read when the game starts.",
+    onClick = function() if _G.ReloadUI then ReloadUI() end end }
+  def { category = "compat", type = "button", id = "compatNotice", label = "Show the clash notice again",
+    tooltip = "Prints the chat notice about addons that draw the same things again. It is shown once per character at login, and again only for an addon that is new.",
+    onClick = function() AC.ReshowNotice() end }
+  def { category = "compat", type = "button", id = "compatReport", label = "Print the compatibility report",
+    tooltip = "Prints every known addon that is loaded, what was done about it and the state of the switches, in the chat window. Paste it in a bug report. The same as /afui compat.",
+    onClick = function() AC.Report() end }
+end
+
 -- About
 def { category = "about", type = "text", id = "aboutName", lines = 1,
   text = function() return "|cffffd100" .. S.TITLE .. "|r  " .. (S.Version() or "") end }
@@ -309,7 +336,7 @@ def { category = "about", type = "text", id = "aboutCmds", lines = 2,
 def { category = "about", type = "text", id = "aboutThanks", lines = 2,
   text = "|cffffd100Thank you for using and supporting Aztra's Forever UI.|r Made with love by Aztra." }
 def { category = "about", type = "text", id = "aboutCrusader", lines = 2,
-  text = "|cffffd100Version 0.93 Beta.|r This addon was specifically designed for |cff66ccffCrusader-Storm|r. Please report anything odd you find while testing." }
+  text = "|cffffd100Version 0.94 Beta.|r This addon was specifically designed for |cff66ccffCrusader-Storm|r. Please report anything odd you find while testing." }
 -- WoW cannot open a browser: a link button shows the url in a small box, Ctrl+C copies it.
 S.LINKS = {} -- add { id, label, url } entries here; each one becomes a button on the About page
 S.LINK_HINT = "Press Ctrl+C to copy, then paste in your browser"
@@ -523,6 +550,7 @@ local function build()
   for i, c in ipairs(S.CATEGORIES) do
     local b = CreateFrame("Button", "AFUI_SettingsTab" .. i, f)
     Kt.sideTab(b, f, i, AFUI.IconPath(c.icon), c.label)
+    b:ClearAllPoints(); b:SetPoint("TOPLEFT", f, "TOPRIGHT", 0, S.TabY(i)) -- squeezed when the column would run past the window bottom
     b:SetScript("OnClick", function() S.Select(c.key) end)
     S.tabs[i] = b
   end
@@ -548,7 +576,7 @@ function S.Frame() return win end
 AFUI.Slash.Register("config", function(rest)
   local page = tostring(rest or ""):lower():gsub("%s", "")
   S.Open(categoryIndex(page) and page or nil)
-end, "open this window (add a page: general, profiles, actionbars, chat, tooltips, nameplates, tracker, about)", "/afui [config]")
+end, "open this window (add a page: general, profiles, actionbars, chat, tooltips, nameplates, tracker, compat, about)", "/afui [config]")
 local function printLinks()
   say("links (the buttons on the About page open a box to copy them)")
   for _, l in ipairs(S.LINKS) do AFUI.Print("  |cff66ccff" .. l.label .. "|r  " .. l.url) end

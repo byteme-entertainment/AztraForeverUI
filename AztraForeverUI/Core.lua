@@ -48,17 +48,27 @@ AFUI.On("PLAYER_REGEN_ENABLED", function()
 end)
 
 AFUI.Modules = {}
-local order = {}
+local order, names = {}, {}
 function AFUI.RegisterModule(name, module)
   AFUI.Modules[name] = module
   order[#order + 1] = module
+  names[#order] = name
 end
+-- Takeover modules: AddonCompat.lua maps each module name to a group (AFUI.ModuleGroup) and answers AFUI.ModuleEnabled(group): the player's switch, or a default that
+-- gives way to an addon that draws the same thing. A module of a group that is off does not start: its OnLogin is skipped and its OnYield (when it has one) runs.
+AFUI.ModuleGroup = {}
+function AFUI.ModuleEnabled() return true end -- replaced by AddonCompat.lua
 AFUI.On("PLAYER_LOGIN", function()
+  AFUI.LoginStarted = true
   if AFUI.RaisePopups then AFUI.RaisePopups() end
-  if IsAddOnLoaded("Bartender4") then
-    AFUI.Print("Aztra's Forever UI: disable Bartender4 for this character, both replace the action bars.")
+  for i = 1, #order do
+    local m, group = order[i], AFUI.ModuleGroup[names[i]]
+    if group and not AFUI.ModuleEnabled(group) then
+      if m.OnYield then try(m.OnYield) end
+    elseif m.OnLogin then
+      try(m.OnLogin)
+    end
   end
-  for i = 1, #order do if order[i].OnLogin then try(order[i].OnLogin) end end
 end)
 
 -- The /afui command words. A module registers its own (AFUI.Slash.Register("name", fn(rest), "what it does", "usage")); a bare /afui runs "config" (Settings.lua), an

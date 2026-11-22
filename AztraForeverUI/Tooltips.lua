@@ -357,6 +357,27 @@ local function hookIds(tip)
   end
 end
 
+-- Item Level / ids of an item tooltip. With deferExtras (Pawn is around, AddonCompat.lua) they are added by one more OnTooltipSetItem hook, put on after the other addons' hooks,
+-- so lines other addons add keep their place and ours follow; the hook is inert otherwise. afExtraDone and the same-text check keep every line from showing twice.
+local function itemExtras(self)
+  local link; if self.GetItem then _, link = self:GetItem() end
+  local _, id = T.LinkId(link)
+  T.AddExtras(self, "item", id, link)
+end
+T.lateHooked = {}
+function T.DeferExtras(on)
+  if on and not AFUI.ModuleEnabled("tooltips") then return end -- our tooltip module is off: nothing of ours to add
+  T.deferExtras = on and true or false
+  if not on then return end
+  for _, n in ipairs(T.NAMES) do
+    local tip = _G[n]
+    if tip and tip.HookScript and tip.HasScript and tip:HasScript("OnTooltipSetItem") and not T.lateHooked[tip] then
+      T.lateHooked[tip] = true
+      tip:HookScript("OnTooltipSetItem", function(self) if T.deferExtras then itemExtras(self) end end)
+    end
+  end
+end
+
 local done
 local function setup()
   if done then return end
@@ -371,9 +392,7 @@ local function setup()
       if tip.HasScript and tip:HasScript("OnTooltipSetItem") then
         tip:HookScript("OnTooltipSetItem", function(self)
           skin(self, itemEdge(self)); T.AddSellPrice(self)
-          local link; if self.GetItem then _, link = self:GetItem() end
-          local _, id = T.LinkId(link)
-          T.AddExtras(self, "item", id, link)
+          if not T.deferExtras then itemExtras(self) end
         end)
       end
       hookIds(tip)
