@@ -328,6 +328,23 @@ function Bags.EmptySlotTexture(texture)
   return name
 end
 
+-- Paints the wing slot behind `b` and keeps the client's own empty-slot pieces from covering it. The client (2.5.3) draws its own flat art on empty bank slots and bank bag slots
+-- (the slot-background region, the normal texture, and an icon showing the bag silhouette), so every update re-asserts: ours sits in BORDER at sublevel -8: below the icon (BORDER or ARTWORK, sublevel 0), theirs are hidden.
+-- `empty` true = no item in the slot (the client's icon is hidden then); `dim` = a bank bag slot not bought yet.
+local CLIENT_SLOT_ART = { "ItemSlotBackground", "SlotBackground", "Slot", "emptyBackground", "NormalTexture" }
+function Bags.PaintEmptyArt(b, empty, dim)
+  if not b.bg then return end
+  AFUI.SetAtlas(b.bg, Bags.EmptyArt())
+  if b.bg.SetDrawLayer then b.bg:SetDrawLayer("BORDER", -8) end
+  b.bg:Show()
+  local v = dim and 0.55 or 1
+  b.bg:SetVertexColor(v, v, v, 1)
+  for _, k in ipairs(CLIENT_SLOT_ART) do local r = rawget(b, k); if type(r) == "table" and r.Hide then r:Hide() end end
+  local n = b.GetName and b:GetName()
+  if n then for _, k in ipairs({ "NormalTexture", "SlotTexture" }) do local r = _G[n .. k]; if r and r.Hide then r:Hide() end end end
+  if empty and b.icon then b.icon:Hide() end
+end
+
 -- bag family flags of a held bag (0 = general); GetContainerNumFreeSlots returns free, family
 function Bags.BagType(bag)
   if bag < 0 or not GetContainerNumFreeSlots then return 0 end
@@ -1218,7 +1235,7 @@ function Bags.UpdateButton(b)
   else
     icon:Hide()
   end
-  AFUI.SetAtlas(b.bg, Bags.EmptyArt())
+  Bags.PaintEmptyArt(b, not tex)
   SetItemButtonCount(b, tex and count or 0)
   if tex and quality and quality > 1 then
     b.quality:SetVertexColor(qualityColor(quality)); b.quality:Show()
@@ -1351,12 +1368,13 @@ function Bags.SkinSlot(b, size, bag, slot)
     b.quality = b:CreateTexture(nil, "OVERLAY"); b.quality:SetTexture(PLAIN .. "WhiteIconFrame"); b.quality:SetAllPoints(b); b.quality:Hide()
     b.newGlow = atlasTexture(b, "OVERLAY", "bags-glow-green", 39, 39); b.newGlow:SetPoint("CENTER"); b.newGlow:SetBlendMode("ADD"); b.newGlow:Hide()
   end
-  AFUI.SetAtlas(b.bg, Bags.EmptyArt())
+  Bags.PaintEmptyArt(b, nil, b.afDim)
   Bags.HookSeen(b, bag, slot)
 end
 
 -- Quality border, glow and item level of a skinned slot for what it holds now (link nil = empty).
 function Bags.PaintSlot(b, bag, slot, link, quality, hasItem)
+  Bags.PaintEmptyArt(b, not hasItem, b.afDim)
   if hasItem and quality and quality > 1 then b.quality:SetVertexColor(qualityColor(quality)); b.quality:Show() else b.quality:Hide() end
   Bags.ApplyGlow(b, bag, slot, quality, hasItem)
   IL.Set(b, link, "bag", on("bagItemLevel"))
@@ -1424,6 +1442,7 @@ local function layout(key)
   end
   win.scale = scale
   win:SetScale(scale); win:SetWidth(w); win:SetHeight(h)
+  for _, tb in ipairs({ win.sort, win.layoutBtn }) do if tb.FitIcon then tb:FitIcon() end end -- the glyphs are sized in whole pixels of the new scale
   skin(win, w, h)
   win.rock:SetTexCoord(0, (w - 4) / 512, 0, (h - 23) / 512)
   win.title:SetWidth(w - 122); win.title:SetHeight(12); win.title:SetText(bagTitle(key))
@@ -1666,7 +1685,7 @@ local function makeSearch(win, id)
   local r = atlasTexture(e, "BACKGROUND", "common-input-left"); r:SetPoint("TOPRIGHT", e, "TOPRIGHT", 4, 3); r:SetPoint("BOTTOMRIGHT", e, "BOTTOMRIGHT", 4, -3); r:SetWidth(10)
   do local en = AFUI_ATLAS and AFUI_ATLAS["common-input-left"]; if en then r:SetTexCoord(en[5], en[4], en[6], en[7]) end end
   local m = atlasTexture(e, "BACKGROUND", "common-input-middle"); m:SetPoint("TOPLEFT", l, "TOPRIGHT"); m:SetPoint("BOTTOMRIGHT", r, "BOTTOMLEFT")
-  local mag = atlasTexture(e, "OVERLAY", "common-search-magnifyingglass", 10, 10); mag:SetPoint("LEFT", e, "LEFT", 1, -1)
+  local mag = e:CreateTexture(nil, "OVERLAY"); mag:SetTexture(Bags.ICONS.search); mag:SetWidth(12); mag:SetHeight(12); mag:SetPoint("LEFT", e, "LEFT", 0, -1)
   e:SetTextInsets(16, 8, 0, 0)
   e.hint = e:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
   e.hint:SetPoint("LEFT", e, "LEFT", 16, 0); e.hint:SetText(SEARCH or "Search")
@@ -1813,17 +1832,62 @@ local function redButton(parent, w, h, text, onClick)
   return b
 end
 
--- A toolbar button of the same look: the red frame with the icon (an atlas) inset, `down` the atlas while pressed. Clean Up and the Layout gear use it.
-function Bags.IconButton(parent, up, down, size)
+-- The toolbar icon set (tools/bag-icons.mjs): square 64 x 64 files, so a texture drawn square is never stretched.
+Bags.ICONS = {
+  broom = "Interface\\AddOns\\AztraForeverUI\\Media\\plain\\UI-BagIcon-Broom",
+  gear = "Interface\\AddOns\\AztraForeverUI\\Media\\plain\\UI-BagIcon-Gear",
+  key = "Interface\\AddOns\\AztraForeverUI\\Media\\plain\\UI-BagIcon-Key",
+  search = "Interface\\AddOns\\AztraForeverUI\\Media\\plain\\UI-BagIcon-Search",
+}
+
+-- Physical pixels per UI unit of a frame (1 when the client cannot say): icons are sized and nudged in whole pixels.
+local function pixelsPerUnit(f)
+  local eff = f.GetEffectiveScale and f:GetEffectiveScale() or 1
+  local res = _G.GetCVar and GetCVar("gxResolution")
+  local h = tonumber(type(res) == "string" and res:match("x(%d+)") or nil)
+  return (h and eff and eff > 0) and h * eff / 768 or 1
+end
+
+-- The glyph's side for a button of `size` units: about 64%, trimmed so button minus glyph is an even number of physical pixels (the glyph's centre then falls on a pixel edge).
+function Bags.IconSide(size, k)
+  k = k or 1
+  local btn = math.floor(size * k + 0.5)
+  local px = math.floor(btn * 0.64 + 0.5)
+  if (btn - px) % 2 == 1 then px = px + 1 end
+  return px / k
+end
+
+-- Paints a toolbar button's glyph for its state: normal (slightly dim), hover (full), pressed (1 px down, dim), disabled (grey).
+function Bags.PaintIconButton(b)
+  local t, k = b.icon, pixelsPerUnit(b)
+  local side = Bags.IconSide(b:GetWidth(), k)
+  t:SetWidth(side); t:SetHeight(side)
+  local down = b.afDown and 1 / k or 0
+  t:ClearAllPoints(); t:SetPoint("CENTER", b, "CENTER", 0, -down)
+  local enabled = not b.IsEnabled or b:IsEnabled()
+  if t.SetDesaturated then t:SetDesaturated(not enabled) end
+  local v = not enabled and 0.55 or (b.afDown and 0.7 or (b.afOver and 1 or 0.88))
+  t:SetVertexColor(v, v, v, 1)
+end
+
+-- A toolbar button of the same look: the red frame with a glyph of the set above (`name` = a key of Bags.ICONS) centred in it. Clean Up and the Layout gear use it.
+function Bags.IconButton(parent, name, size)
   size = size or 24
   local b = CreateFrame("Button", nil, parent)
   b:SetWidth(size); b:SetHeight(size); b:SetFrameLevel(parent:GetFrameLevel() + 30)
   if AFUI.WinKit and AFUI.WinKit.button then AFUI.WinKit.button(b, size, size); b.afRed = true end
-  b.icon = atlasTexture(b, "OVERLAY", up, 16, 16); b.icon.afOwn = true -- afOwn: WinKit's strip leaves our own pieces alone
-  b.icon:SetPoint("CENTER", b, "CENTER", 0, 0)
-  if down then
-    b:HookScript("OnMouseDown", function(self) AFUI.SetAtlas(self.icon, down); self.icon:SetPoint("CENTER", self, "CENTER", 1, -1) end)
-    b:HookScript("OnMouseUp", function(self) AFUI.SetAtlas(self.icon, up); self.icon:SetPoint("CENTER", self, "CENTER", 0, 0) end)
+  b.icon = b:CreateTexture(nil, "OVERLAY"); b.icon.afOwn = true -- afOwn: WinKit's strip leaves our own pieces alone
+  b.icon:SetTexture(Bags.ICONS[name]); b.icon:SetTexCoord(0, 1, 0, 1)
+  b.iconName = name
+  b.FitIcon = Bags.PaintIconButton
+  Bags.PaintIconButton(b)
+  b:HookScript("OnMouseDown", function(self) self.afDown = true; Bags.PaintIconButton(self) end)
+  b:HookScript("OnMouseUp", function(self) self.afDown = nil; Bags.PaintIconButton(self) end)
+  b:HookScript("OnEnter", function(self) self.afOver = true; Bags.PaintIconButton(self) end)
+  b:HookScript("OnLeave", function(self) self.afOver, self.afDown = nil, nil; Bags.PaintIconButton(self) end)
+  b:HookScript("OnShow", Bags.PaintIconButton) -- the effective scale is known once it is shown
+  for _, fn in ipairs({ "Enable", "Disable", "SetEnabled" }) do
+    if type(b[fn]) == "function" then hooksecurefunc(b, fn, function() Bags.PaintIconButton(b) end) end
   end
   return b
 end
@@ -1884,7 +1948,7 @@ end
 
 -- The gear button of a combined window's toolbar (kind "bags" / "bank"): the red frame, the cog inside.
 function Bags.MakeLayoutButton(win, kind)
-  local b = Bags.IconButton(win, "questlog-icon-setting")
+  local b = Bags.IconButton(win, "gear")
   b:SetScript("OnClick", function(self) Bags.ToggleLayoutPopup(kind, self) end)
   b:SetScript("OnEnter", function(self)
     GameTooltip:SetOwner(self, "ANCHOR_TOP"); GameTooltip:SetText("Layout", 1, 1, 1)
@@ -1936,8 +2000,14 @@ local function makeWindow(key)
     local kb = CreateFrame("Button", nil, win)
     kb:SetWidth(20); kb:SetHeight(20); kb:SetFrameLevel(win:GetFrameLevel() + 30)
     kb:SetPoint("RIGHT", win.countIcon, "LEFT", -8, 0)
-    kb.icon = kb:CreateTexture(nil, "ARTWORK"); kb.icon:SetAllPoints(kb); AFUI.SetAtlas(kb.icon, "ui-hud-actionbar-keyring-small-c60")
-    kb.Refresh = function() kb.icon:SetAlpha(Bags.KeyringShown() and 1 or 0.45) end
+    kb.icon = kb:CreateTexture(nil, "ARTWORK"); kb.icon:SetTexture(Bags.ICONS.key); kb.icon:SetTexCoord(0, 1, 0, 1) -- the key file is square and drawn square: never stretched
+    kb.icon:SetWidth(18); kb.icon:SetHeight(18); kb.icon:SetPoint("CENTER", kb, "CENTER", 0, 0)
+    kb.paint = function() local on = Bags.KeyringShown(); kb.icon:SetAlpha(on and 1 or 0.45); local v = (kb.afDown and 0.7) or ((kb.afOver or on) and 1 or 0.88); kb.icon:SetVertexColor(v, v, v, 1) end
+    kb.Refresh = kb.paint
+    kb:HookScript("OnEnter", function(self) self.afOver = true; self.paint() end)
+    kb:HookScript("OnLeave", function(self) self.afOver, self.afDown = nil, nil; self.icon:SetPoint("CENTER", self, "CENTER", 0, 0); self.paint() end)
+    kb:HookScript("OnMouseDown", function(self) self.afDown = true; self.icon:SetPoint("CENTER", self, "CENTER", 0, -1); self.paint() end)
+    kb:HookScript("OnMouseUp", function(self) self.afDown = nil; self.icon:SetPoint("CENTER", self, "CENTER", 0, 0); self.paint() end)
     kb:SetScript("OnClick", function() Bags.ToggleKeyringSection() end)
     kb:SetScript("OnEnter", function(self)
       GameTooltip:SetOwner(self, "ANCHOR_TOP"); GameTooltip:SetText(Bags.KeyringShown() and "Hide keyring" or "Show keyring", 1, 1, 1); GameTooltip:Show()
@@ -1978,7 +2048,7 @@ local function makeWindow(key)
   win.money = makeMoney(win, id)
   win.currency = makeCurrency(win, id)
   -- sort / clean up (the gold button right of the search box); TBC has no SortBags, so Bags.Sort swaps items out of combat
-  local sb = Bags.IconButton(win, "bags-button-autosort-up", "bags-button-autosort-down"); sb:SetPoint("TOPRIGHT", win, "TOPRIGHT", -9, -30)
+  local sb = Bags.IconButton(win, "broom"); sb:SetPoint("TOPRIGHT", win, "TOPRIGHT", -9, -30)
   sb:SetScript("OnClick", function() Bags.CleanUp() end)
   sb:SetScript("OnEnter", function(self)
     GameTooltip:SetOwner(self, "ANCHOR_LEFT"); GameTooltip:SetText(BAG_CLEANUP_BAGS or "Clean Up Bags", 1, 1, 1)

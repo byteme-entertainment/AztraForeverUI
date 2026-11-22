@@ -163,6 +163,7 @@ function B.UpdateButton(b)
     local inv = _G.BankButtonIDToInvSlotID and BankButtonIDToInvSlotID(id, 1)
     local link = inv and GetInventoryItemLink and GetInventoryItemLink("player", inv)
     local q = link and _G.GetInventoryItemQuality and GetInventoryItemQuality("player", inv) or nil
+    b.afDim = _G.GetNumBankSlots and id > (GetNumBankSlots() or 0) or false -- a bank bag slot not bought yet: the same wing art, darker
     AFUI.Bags.PaintSlot(b, BANK_CONTAINER - 3, id, link, q, link and true or false)
     return
   end
@@ -197,6 +198,7 @@ function B.Layout()
   B.metrics, B.sig = m, sizeSig()
   local scale = m.scale or 1
   f:SetScale(scale); f:SetWidth(m.w); f:SetHeight(m.h)
+  for _, tb in ipairs({ B.sort, B.layoutBtn }) do if tb.FitIcon then tb:FitIcon() end end -- the glyphs are sized in whole pixels of the new scale
   if f.SetClampedToScreen then f:SetClampedToScreen(true) end -- never off the screen, whatever spot the player dragged it to
   if f.SetHitRectInsets then f:SetHitRectInsets(0, 0, 0, 0) end
   AFUI.Bags.Chrome(f, m.w, m.h, true)
@@ -298,7 +300,7 @@ function B.Setup()
   B.coin = B.CoinBox(f)
   -- search box (the combined bags window's own, shared text) and the Clean Up button beside it, "Sorting..." in the footer while a run is going
   B.search = AFUI.Bags.MakeSearch(f, "Bank")
-  local sb = AFUI.Bags.IconButton(f, "bags-button-autosort-up", "bags-button-autosort-down"); sb:SetPoint("TOPRIGHT", f, "TOPRIGHT", -9, -30)
+  local sb = AFUI.Bags.IconButton(f, "broom"); sb:SetPoint("TOPRIGHT", f, "TOPRIGHT", -9, -30)
   sb:SetScript("OnClick", function() AFUI.Bags.CleanUp(B.SortSlots(), B.Shown) end)
   sb:SetScript("OnEnter", function(self)
     GameTooltip:SetOwner(self, "ANCHOR_LEFT"); GameTooltip:SetText("Clean Up Bank", 1, 1, 1)

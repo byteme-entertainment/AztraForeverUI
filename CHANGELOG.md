@@ -8,6 +8,8 @@
 - **Nameplates.** Plates stay put (no sliding), a compact layout, and a new Organized mode that arranges crowds in a neat screen-aligned grid. Every level is shown by default. The error "Can't measure restricted regions" is fixed.
 - **Bank and bags.** The bank opens as one combined window with a search bar and Clean Up. Choose the columns, slot size and spacing (gear button), a proper footer with the money inside the frame, red buttons, and the layout panel closes when you click outside it.
 - **Mailbox and Auction House** have a full redesign with quality-of-life tools (Open All, Collect All, recent recipients, price per unit, undercut...). They are off by default: turn them on in Settings > Windows. The Send Mail tab was redone (real attachment count, thin boxes, bag-style empty slots, one Postage label, autocomplete left alone).
+- **Bank and bags icons** redrawn: a broom (Clean Up), a cog (Layout), a proper key for the keyring (no longer stretched) and a magnifier, all centred inside the red buttons. Empty bank slots now show the same dark wing art as the bags.
+- **Send Mail:** attachments are spread evenly in one row with a live count (Attachments 3/7), and the money controls are protected from being hidden (use /afui mailreport if anything is missing).
 - Settings side tabs fit the window (the window is taller and the tab column scrolls if more pages are added).
 
 ## 0.94 Beta

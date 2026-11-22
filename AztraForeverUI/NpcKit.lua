@@ -53,7 +53,7 @@ end
 -- name we do not know cannot show through next to ours (the real 2.5.3 Send Mail page printed "To: To:" and two "Postage:" that way). o = {
 --   keep = { name = true } controls we place (kept), keepText = { name = true } FontStrings that stay, fontsIn = { name = true } kept frames whose own FontString regions are swept too
 --   (edit boxes carry their labels there; a table instead of true = { [N.Norm(text)] = true }: only the FontStrings with those texts go, every other FontString of the box stays), scrolls = { name = true } kept scroll frames (their unknown sliders go, or restyle when the scroll frame has no bar yet),
---   textures = true (the host's own texture regions go too), interactive = true (an unlisted child that is or holds a button / edit box / scroll frame stays), children = false (leave child frames alone: window hosts whose chrome is ours), scrollX = gap of a restyled bar }.
+--   textures = true (the host's own texture regions go too), interactive = false turns OFF the default (an unlisted child that is or holds a button / check button / edit box / scroll frame ALWAYS stays: only pure decoration goes), children = false (leave child frames alone: window hosts whose chrome is ours), scrollX = gap of a restyled bar }.
 -- Our own pieces (afOwn / afKeep / afLabel / AFUI_ names) always stay. Returns the report rows { name, kind, text, action } and stores them under the host's name (N.ReportLines).
 N.sweeps = {}
 function N.Norm(s) return (tostring(s or ""):lower():gsub("[%s:]+$", "")) end -- "Postage: " -> "postage"
@@ -62,7 +62,7 @@ function N.HasInput(f, depth)
   local k = f.GetObjectType and f:GetObjectType()
   if k == "Slider" then return false end -- a scroll bar's arrows are buttons, but a stray bar is exactly what goes
   if INPUT[k] then return true end
-  if (depth or 0) < 3 and f.GetChildren then
+  if (depth or 0) < 6 and f.GetChildren then
     for _, c in ipairs({ f:GetChildren() }) do if N.HasInput(c, (depth or 0) + 1) then return true end end
   end
   return false
@@ -120,7 +120,7 @@ function N.Sweep(host, o)
         note(c, "kept")
         if n and fontsIn[n] then regions(c, false, type(fontsIn[n]) == "table" and fontsIn[n] or nil) end
         if n and scrolls[n] then sliders(c) end
-      elseif o.interactive and N.HasInput(c) then note(c, "kept") -- an unlisted control stays: a page whose control names are not all known must keep working
+      elseif o.interactive ~= false and N.HasInput(c) then note(c, "kept") -- an unlisted control (or a frame holding one) stays: a page whose control names are not all known must keep working
       else gone(c); note(c, "hidden") end
     end
   else -- a window host: its chrome is ours, but the scroll frames and edit boxes inside it still get their labels and sliders checked
