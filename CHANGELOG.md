@@ -1,6 +1,10 @@
 # Changelog
 
-## 0.95 Beta (latest)
+## 0.96 Beta (latest)
+
+- **Possession and override bars (e.g. Teron Gorefiend's ghost).** The main action bar now follows the client's override, possess, vehicle and shapeshift pages, so those abilities show on your main bar with your normal keys. The possess bar and its cancel button appear when the client provides them. `/afui bars` prints the page and slot diagnostic.
+
+## 0.95 Beta
 
 - **Aura filters for the raid-style party frames.** Choose what auras show: all, only mine, only a list, all except a list, or mine plus a list; only dispellable debuffs; hide permanent buffs; max icons and sorting. Built-in starter lists (healer HoTs, raid defensive cooldowns, utility buffs, TBC raid debuffs), a spell picker with spellbook suggestions, recently seen auras and target auras, export and import. Open it with /afui filters.
 - **Windows page.** Settings > Windows has one switch for every window we draw, so you can keep Blizzard's own version of just that window. Off means completely native. Changes apply after a reload.
@@ -10,7 +14,6 @@
 - **Mailbox and Auction House** have a full redesign with quality-of-life tools (Open All, Collect All, recent recipients, price per unit, undercut...). They are off by default: turn them on in Settings > Windows. The Send Mail tab was redone (real attachment count, thin boxes, bag-style empty slots, one Postage label, autocomplete left alone).
 - **Bank and bags icons** redrawn: a broom (Clean Up), a cog (Layout), a proper key for the keyring (no longer stretched) and a magnifier, all centred inside the red buttons. Empty bank slots now show the same dark wing art as the bags.
 - **Send Mail:** attachments are spread evenly in one row with a live count (Attachments 3/7), and the money controls are protected from being hidden (use /afui mailreport if anything is missing).
-- **Possession and override bars (e.g. Teron Gorefiend's ghost).** The main action bar now follows the client's override, possess, vehicle and shapeshift pages, so those abilities show on your main bar with your normal keys. The possess bar and its cancel button appear when the client provides them. `/afui bars` prints the page and slot diagnostic.
 - Settings side tabs fit the window (the window is taller and the tab column scrolls if more pages are added).
 
 ## 0.94 Beta
