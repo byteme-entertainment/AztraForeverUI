@@ -10,6 +10,7 @@
 - **Mailbox and Auction House** have a full redesign with quality-of-life tools (Open All, Collect All, recent recipients, price per unit, undercut...). They are off by default: turn them on in Settings > Windows. The Send Mail tab was redone (real attachment count, thin boxes, bag-style empty slots, one Postage label, autocomplete left alone).
 - **Bank and bags icons** redrawn: a broom (Clean Up), a cog (Layout), a proper key for the keyring (no longer stretched) and a magnifier, all centred inside the red buttons. Empty bank slots now show the same dark wing art as the bags.
 - **Send Mail:** attachments are spread evenly in one row with a live count (Attachments 3/7), and the money controls are protected from being hidden (use /afui mailreport if anything is missing).
+- **Possession and override bars (e.g. Teron Gorefiend's ghost).** The main action bar now follows the client's override, possess, vehicle and shapeshift pages, so those abilities show on your main bar with your normal keys. The possess bar and its cancel button appear when the client provides them. `/afui bars` prints the page and slot diagnostic.
 - Settings side tabs fit the window (the window is taller and the tab column scrolls if more pages are added).
 
 ## 0.94 Beta

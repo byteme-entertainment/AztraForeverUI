@@ -787,13 +787,13 @@ local EXTRAS = {
 -- No possess bar where the client has none (2.5.3): no frame, so no Edit Mode system either.
 if AFUI.POSSESS.count > 0 then
   EXTRAS[#EXTRAS + 1] = { key = "possess", name = "Possess", prefix = AFUI.POSSESS.button, count = AFUI.POSSESS.count,
-    size = 36, old = AFUI.POSSESS.frame, driver = "[bonusbar:5]show;hide" }
+    size = 36, old = AFUI.POSSESS.frame, driver = (AFUI.MODERN_BARS and "[possessbar]" or "") .. "[bonusbar:5]show;hide" }
 end
 local EXTRA_DEFAULTS = { numRows = 1, padding = 2, orientation = "Horizontal", hidden = false }
 
 -- The visibility driver of an extra bar: "Hide Bar" wins (a plain secure 'hide', so form changes and pets cannot show it again); the stance
 -- driver runs only for a class with forms (the form count changes when a form is learned, not in a fight). Out of combat only.
-local STANCE_DRIVER = "[bonusbar:5]hide;show"
+local STANCE_DRIVER = AFUI.TAKEOVER_COND .. "[bonusbar:5]hide;show"
 local function ApplyDriver(d)
   local bar = d.bar
   local want = d.driver

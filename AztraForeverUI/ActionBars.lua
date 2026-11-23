@@ -1,7 +1,28 @@
 -- Main (paged) and four extra action bars built from Blizzard's ActionBarButtonTemplate.
 local SIZE = 45 -- Forever's ActionButtonTemplate size
 
-AFUI.PAGE_DRIVER = "[bar:2]2;[bar:3]3;[bar:4]4;[bar:5]5;[bar:6]6;[bonusbar:5]11;[bonusbar:1]7;[bonusbar:2]8;[bonusbar:3]9;[bonusbar:4]10;1"
+-- Blizzard pages the main bar for override / possess / temporary-shapeshift / vehicle bars first (its MainMenuBar paging string). Those
+-- conditionals and *BarIndex getters exist on the modern-engine client only, so each is added only when its getter is there (the stock
+-- indexes are the fallbacks). The driver is registered once at load: in combat only the secure header changes the page.
+local BASE_DRIVER = "[bar:2]2;[bar:3]3;[bar:4]4;[bar:5]5;[bar:6]6;[bonusbar:5]11;[bonusbar:1]7;[bonusbar:2]8;[bonusbar:3]9;[bonusbar:4]10;1"
+AFUI.MODERN_BARS = not AFUI.IS_243 and type(_G.GetOverrideBarIndex) == "function"
+function AFUI.BuildPageDriver()
+  local pre = ""
+  if AFUI.MODERN_BARS then
+    local function page(cond, getter, default)
+      local n = type(_G[getter]) == "function" and tonumber(_G[getter]()) or default
+      pre = pre .. "[" .. cond .. "]" .. n .. ";"
+    end
+    page("overridebar", "GetOverrideBarIndex", 18)
+    page("possessbar", "GetVehicleBarIndex", 16)
+    if type(_G.GetTempShapeshiftBarIndex) == "function" then page("shapeshift", "GetTempShapeshiftBarIndex", 17) end
+    page("vehicleui", "GetVehicleBarIndex", 16)
+  end
+  return pre .. BASE_DRIVER
+end
+AFUI.PAGE_DRIVER = AFUI.BuildPageDriver()
+-- Bars that replace the stance bar (and, for possess, the possess bar itself shows): the stance driver and the possess driver build on these.
+AFUI.TAKEOVER_COND = AFUI.MODERN_BARS and "[overridebar][possessbar][vehicleui]" or ""
 
 function AFUI.ActionFor(page, i) return (page - 1) * 12 + i end
 

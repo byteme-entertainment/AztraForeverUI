@@ -1182,6 +1182,25 @@ Slash.Register("maphit", function()
   end)
 end, "where the world map thinks the mouse is, and which map that opens (3 seconds delay)", "/afui maphit")
 
+-- /afui bars, paging lines: the page flags the client reports, the main bar's driver string and, for slots 1-12, the action id and texture (text only, to paste during
+-- a possession / override phase). Pure reads, pcall-wrapped; a getter the client lacks prints "n/a".
+function A.PageLines()
+  local function q(fn) local f = _G[fn]; if type(f) ~= "function" then return "n/a" end local ok, v = pcall(f); return ok and tostring(v) or "err" end
+  local lines = { string.format("page=%s bonus=%s override=%s vehicle=%s possess=%s tempshapeshift=%s idx(override/vehicle/temp)=%s/%s/%s", q("GetActionBarPage"),
+    q("GetBonusBarOffset"), q("HasOverrideActionBar"), q("HasVehicleActionBar"), q("IsPossessBarVisible"), q("HasTempShapeshiftActionBar"),
+    q("GetOverrideBarIndex"), q("GetVehicleBarIndex"), q("GetTempShapeshiftBarIndex")) }
+  lines[2] = "driver=" .. tostring(AFUI.PAGE_DRIVER)
+  local pb = AFUI.Bars and AFUI.Bars.possess
+  lines[3] = "possessbar=" .. (pb and ("shown=" .. tostring(pb.frame:IsShown())) or "none") .. " petbar=" .. tostring(AFUI.Bars and AFUI.Bars.pet and AFUI.Bars.pet.frame:IsShown())
+  for i = 1, 12 do
+    local b = _G["AFUI_MainButton" .. i]
+    local a = b and ((AFUI.FX and AFUI.FX.ActionOf(b)) or b:GetAttribute("action"))
+    local tex = a and _G.GetActionTexture and GetActionTexture(a)
+    lines[#lines + 1] = string.format("slot %d: action=%s texture=%s", i, tostring(a), tostring(tex))
+  end
+  return lines
+end
+
 -- /afui bars: each action bar from the bottom up as the player sees it: our bar key, the client's frame and first button, its action slot, its first key, and where it is.
 Slash.Register("bars", function()
   local rows = {
@@ -1196,4 +1215,5 @@ Slash.Register("bars", function()
     local key = GetBindingKey and GetBindingKey(r[3]) or "-"
     say(string.format("bar %s (%s): shown=%s x=%.0f y=%.0f action=%s key=%s", r[1], r[2], tostring(f and f:IsShown()), f and f:GetLeft() or -1, f and f:GetBottom() or -1, tostring(act), tostring(key)))
   end
+  for _, l in ipairs(A.PageLines()) do say(l) end
 end, "each action bar from the bottom up with its slot and first key (for bar order reports)", "/afui bars")

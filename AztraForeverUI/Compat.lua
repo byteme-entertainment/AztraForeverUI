@@ -128,7 +128,13 @@ if IS_243 then
   AFUI.POSSESS = { button = "PossessButton", frame = "PossessBarFrame", count = 2 }
 else
   AFUI.STANCE = { button = "StanceButton", frame = "StanceBarFrame", update = { "StanceBar_Update" } }
-  AFUI.POSSESS = { count = 0 }
+  -- Possess buttons (Mind Control, Teron's ghost): a bar of ours wherever the client has the buttons.
+  if _G.PossessButton1 then
+    AFUI.POSSESS = { button = "PossessButton", frame = "PossessBarFrame", count = 2 }
+    if type(_G.PossessBar_Update) == "function" then AFUI.STANCE.update[2] = "PossessBar_Update" end
+  else
+    AFUI.POSSESS = { count = 0 }
+  end
 end
 
 -- Unit frames: group/raid, combo and cooldown API differences.

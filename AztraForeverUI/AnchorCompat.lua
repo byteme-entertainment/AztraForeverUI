@@ -169,7 +169,7 @@ end
 add("track", "PetActionBarFrame", "bars", "PetActionBarFrame", G("AFUI_PetBar"))
 add("track", "ShapeshiftBarFrame", "bars", "ShapeshiftBarFrame", G("AFUI_StanceBar"))
 add("track", "StanceBarFrame", "bars", "StanceBarFrame", G("AFUI_StanceBar"))
-add("track", "PossessBarFrame", "bars", "PossessBarFrame", G("AFUI_PossessBar")).optional = true -- 2.5.3 has no possess bar of ours
+add("track", "PossessBarFrame", "bars", "PossessBarFrame", G("AFUI_PossessBar")).optional = true -- a bar of ours only where the client has PossessButton1 (Compat.lua)
 for i = 1, 10 do
   add("real", "PetActionButton1-10", "bars", "PetActionButton" .. i)
   add("real", "ShapeshiftButton1-10", "bars", "ShapeshiftButton" .. i)
