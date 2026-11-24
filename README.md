@@ -1,6 +1,6 @@
 # Aztra's Forever UI
 
-> **Version 0.96 Beta.** This addon was specifically designed for **Crusader-Storm**. It is a public beta: please report anything odd. [Download the latest version](https://github.com/byteme-entertainment/AztraForeverUI/releases/latest) · [Changelog](CHANGELOG.md)
+> **Version 0.97 Beta.** This addon was specifically designed for **Crusader-Storm**. It is a public beta: please report anything odd. [Download the latest version](https://github.com/byteme-entertainment/AztraForeverUI/releases/latest) · [Changelog](CHANGELOG.md)
 
 **Make World of Warcraft: The Burning Crusade Classic look and play like Blizzard's *WoW: Forever UI*.**
 

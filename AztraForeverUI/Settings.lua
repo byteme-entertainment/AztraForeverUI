@@ -405,7 +405,7 @@ def { category = "about", type = "text", id = "aboutCmds", lines = 2,
 def { category = "about", type = "text", id = "aboutThanks", lines = 2,
   text = "|cffffd100Thank you for using and supporting Aztra's Forever UI.|r Made with love by Aztra." }
 def { category = "about", type = "text", id = "aboutCrusader", lines = 2,
-  text = "|cffffd100Version 0.96 Beta.|r This addon was specifically designed for |cff66ccffCrusader-Storm|r. Please report anything odd you find while testing." }
+  text = "|cffffd100Version 0.97 Beta.|r This addon was specifically designed for |cff66ccffCrusader-Storm|r. Please report anything odd you find while testing." }
 -- WoW cannot open a browser: a link button shows the url in a small box, Ctrl+C copies it.
 S.LINKS = {} -- add { id, label, url } entries here; each one becomes a button on the About page
 S.LINK_HINT = "Press Ctrl+C to copy, then paste in your browser"

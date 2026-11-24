@@ -1,6 +1,10 @@
 # Changelog
 
-## 0.96 Beta (latest)
+## 0.97 Beta (latest)
+
+- **Trainer window fixed.** The skill list, its scroll bar and the skill texts were drawn outside the window. Every part is now placed inside the window and re-placed whenever the client reorders the list; the cost no longer collides with the coins. `/afui trainerreport` prints where each part is for bug reports. The vendor window also gets a guard so names and prices cannot drift out of their row.
+
+## 0.96 Beta
 
 - **Possession and override bars (e.g. Teron Gorefiend's ghost).** The main action bar now follows the client's override, possess, vehicle and shapeshift pages, so those abilities show on your main bar with your normal keys. The possess bar and its cancel button appear when the client provides them. `/afui bars` prints the page and slot diagnostic.
 

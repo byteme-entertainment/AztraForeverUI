@@ -33,6 +33,36 @@ local function paint(b, slot, link)
   AFUI.Bags.PaintSlot(b, M.CONTAINER, slot, link, quality, link and true or false)
 end
 
+-- Structural guard (the trainer window's lesson: a text the client anchors by its own numbers can drift out of its plate): after every update the name and the price of each shown good are measured; one that lies
+-- outside its good's plate (or the window) goes back onto its good (name on top, price under it). Never errors; the first case is printed once, all are kept in M.problems.
+M.problems = {}
+local function box(o) local l, t, r, b = o:GetLeft(), o:GetTop(), o:GetRight(), o:GetBottom(); if type(l) == "number" and type(t) == "number" and type(r) == "number" and type(b) == "number" then return l, t, r, b end end
+function M.Validate()
+  local f = _G.MerchantFrame
+  if not (f and f.afNpc) then return end
+  local wl, wt, wr, wb = box(f)
+  if not wl then return end
+  local list = {}
+  for i = 1, M.BUYBACK_PER_PAGE do list[#list + 1] = { "MerchantItem" .. i, "MerchantItem" .. i .. "Name", "MerchantItem" .. i .. "MoneyFrame", 42, 7 } end
+  list[#list + 1] = { "MerchantBuyBackItem", "MerchantBuyBackItemName", "MerchantBuyBackItemMoneyFrame", 42, 10 }
+  for _, e in ipairs(list) do
+    local item = _G[e[1]]
+    local il, it, ir, ib = (item and item:IsShown()) and box(item)
+    if il then
+      for k = 2, 3 do
+        local o = _G[e[k]]
+        local l, t, r, b = o and o:IsShown() and box(o)
+        if l and (l < il - 4 or r > ir + 4 or t > it + 4 or b < ib - 4 or l < wl or r > wr or t > wt or b < wb) then
+          M.problems[e[k]] = "outside its plate"
+          if not M.logged and AFUI.Print then M.logged = true; AFUI.Print("|cffff5555Merchant skin|r: '" .. e[k] .. "' was outside its item; moved back onto it") end
+          o:ClearAllPoints()
+          if k == 2 then o:SetPoint("TOPLEFT", item, "TOPLEFT", 42, -4) else o:SetPoint("BOTTOMLEFT", item, "BOTTOMLEFT", 42, 2) end
+        end
+      end
+    end
+  end
+end
+
 function M.Update()
   local f = _G.MerchantFrame
   if not (f and f.afNpc and AFUI.Bags and AFUI.Bags.PaintSlot) then return end
@@ -53,6 +83,7 @@ function M.Update()
     if M.plates.last then setShown(M.plates.last, last:IsShown() and true or false) end
     if lb and lb.afSkinned and last:IsShown() and _G.GetBuybackItemLink and _G.GetNumBuybackItems then paint(lb, 13, GetBuybackItemLink(GetNumBuybackItems())) end
   end
+  pcall(M.Validate)
 end
 
 local function after(f)
